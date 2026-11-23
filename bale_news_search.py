@@ -5,12 +5,7 @@ from urllib.parse import urlencode
 
 SEARCHES = [
     "اخبار شهرستان شفت",
-    "شفت گیلان خبر",
-    "فرمانداری شهرستان شفت",
-    "حوادث شفت گیلان",
-    "روستاهای شهرستان شفت",
-    "اخبار احمدسرگوراب",
-    "اخبار بخش مرکزی شفت"
+    "شفت گیلان خبر"
 ]
 
 def search_news(query):
@@ -31,26 +26,23 @@ def search_news(query):
         )
 
         print("وضعیت اتصال:", response.status_code)
+        print("نوع محتوا:", response.headers.get("Content-Type"))
+
         response.raise_for_status()
 
-        root = ET.fromstring(response.content)
-        items = root.findall(".//item")
+        print("ابتدای پاسخ دریافتی:")
+        print(response.text[:700])
 
-        print("تعداد خبرهای پیدا شده:", len(items))
+        root = ET.fromstring(response.content)
+
+        print("نوع سند:", root.tag)
+
+        items = root.findall(".//item")
+        print("تعداد خبرها:", len(items))
 
         for item in items:
-            title = item.findtext("title", "")
-            link = item.findtext("link", "")
-            date = item.findtext("pubDate", "")
-            source = item.find("source")
-
-            source_name = source.text if source is not None else "نامشخص"
-
-            print("--------------------")
-            print("عنوان:", title)
-            print("منبع:", source_name)
-            print("تاریخ:", date)
-            print("لینک:", link)
+            print("عنوان:", item.findtext("title", ""))
+            print("لینک:", item.findtext("link", ""))
 
     except Exception as error:
         print("خطا:", error)
