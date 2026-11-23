@@ -3,14 +3,20 @@ import requests
 import xml.etree.ElementTree as ET
 import re
 import html
+import time
 
-RSS_URL = "https://www.mehrnews.com/rss"
+RSS_SOURCES = {
+    "خبرگزاری مهر": "https://www.mehrnews.com/rss",
+    "ایسنا": "https://www.isna.ir/rss",
+    "صداوسیما": "https://www.irib-news.ir/fa/rss/allnews?",
+    "باشگاه خبرنگاران جوان": "https://www.yjc.ir/fa/rss/allnews",
+    "تابناک": "https://www.tabnak.ir/fa/rss/allnews",
+}
 
 LOCAL_WORDS = [
-    "شفت",
     "شهرستان شفت",
     "شفت گیلان",
-    "فرماندار شفت",
+    "شفت",
     "احمدسرگوراب",
     "احمد سرگوراب",
     "امامزاده ابراهیم",
@@ -23,7 +29,7 @@ LOCAL_WORDS = [
     "لاسک",
     "بداب",
     "خرمکش",
-    "علیسرا"
+    "علیسرا",
 ]
 
 
@@ -33,39 +39,62 @@ def clean_text(text):
     return " ".join(text.split())
 
 
-def search_news():
+def get_child_text(element, name):
+    for child in element:
+        if child.tag.split("}")[-1] == name:
+            if name == "link":
+                return child.attrib.get("href", child.text or "")
+            return child.text or ""
+    return ""
+
+
+def get_news_items(root):
+    items = []
+
+    for element in root.iter():
+        tag = element.tag.split("}")[-1]
+
+        if tag in ("item", "entry"):
+            items.append(element)
+
+    return items
+
+
+def fetch_source(source_name, rss_url):
+    print("\n==============================")
+    print("منبع:", source_name)
+
     try:
         response = requests.get(
-            RSS_URL,
+            rss_url,
             headers={"User-Agent": "Mozilla/5.0"},
-            timeout=30
+            timeout=25
         )
 
         print("وضعیت اتصال:", response.status_code)
         response.raise_for_status()
 
         root = ET.fromstring(response.content)
-        items = root.findall(".//item")
+        items = get_news_items(root)
 
-        print("تعداد کل خبرهای دریافتی:", len(items))
+        print("تعداد خبرهای دریافتی:", len(items))
 
-        # نمایش عنوان تمام خبرهای دریافتی
-        print("\n========== تمام خبرهای دریافتی ==========")
-
-        for item in items:
-            title = clean_text(item.findtext("title", ""))
-            print("-", title)
-
-        # پیدا کردن خبرهای احتمالی مرتبط با شفت
         found = []
 
         for item in items:
-            title = clean_text(item.findtext("title", ""))
+            title = clean_text(get_child_text(item, "title"))
             description = clean_text(
-                item.findtext("description", "")
+                get_child_text(item, "description")
+                or get_child_text(item, "summary")
+                or get_child_text(item, "content")
             )
-            link = item.findtext("link", "")
-            pub_date = item.findtext("pubDate", "")
+
+            link = get_child_text(item, "link")
+            pub_date = (
+                get_child_text(item, "pubDate")
+                or get_child_text(item, "published")
+                or get_child_text(item, "updated")
+            )
 
             combined = title + " " + description
 
@@ -73,21 +102,59 @@ def search_news():
                 found.append({
                     "title": title,
                     "link": link,
-                    "date": pub_date
+                    "date": pub_date,
+                    "source": source_name
                 })
 
-        print("\n========== خبرهای احتمالی شفت ==========")
-        print("تعداد خبرهای مرتبط:", len(found))
+        print("خبرهای احتمالی مرتبط با شفت:", len(found))
 
-        for news in found:
-            print("\n-------------------------")
-            print("عنوان:", news["title"])
-            print("منبع: خبرگزاری مهر")
-            print("تاریخ:", news["date"])
-            print("لینک:", news["link"])
+        return found
 
     except Exception as error:
-        print("خطا در دریافت خبر:", error)
+        print("خطا در دریافت این منبع:", error)
+        return []
+
+
+def search_news():
+    all_news = []
+    checked_links = set()
+    checked_titles = set()
+
+    for source_name, rss_url in RSS_SOURCES.items():
+        news_list = fetch_source(source_name, rss_url)
+
+        for news in news_list:
+            link = news["link"].strip()
+            title = news["title"].strip()
+
+            if link and link in checked_links:
+                continue
+
+            if title and title in checked_titles:
+                continue
+
+            if link:
+                checked_links.add(link)
+
+            if title:
+                checked_titles.add(title)
+
+            all_news.append(news)
+
+        time.sleep(1)
+
+    print("\n================================")
+    print("نتیجه نهایی جست‌وجوی چندمنبعی")
+    print("================================")
+    print("تعداد کل خبرهای مرتبط احتمالی:", len(all_news))
+
+    for index, news in enumerate(all_news, start=1):
+        print("\n------------------------------")
+        print("شماره:", index)
+        print("عنوان:", news["title"])
+        print("منبع:", news["source"])
+        print("تاریخ:", news["date"])
+        print("لینک:", news["link"])
 
 
 if __name__ == "__main__":
