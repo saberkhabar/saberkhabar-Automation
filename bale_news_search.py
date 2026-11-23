@@ -13,7 +13,7 @@ from urllib.parse import urlparse, parse_qs, urljoin
 
 
 # =====================================
-# تنظیمات
+# تنظیمات اصلی
 # =====================================
 
 DAYS_BACK = 7
@@ -80,7 +80,7 @@ LOCAL_WORDS = [
 
 
 # =====================================
-# کلمات تبلیغاتی
+# کلمات فیلتر
 # =====================================
 
 AD_WORDS = [
@@ -102,25 +102,17 @@ AD_WORDS = [
     "خدمات ما",
     "نمایندگی فروش",
     "فروشگاه",
-    "کسب و کار",
     "تبلیغات",
     "آگهی تبلیغاتی",
     "تور گردشگری",
     "تور زیارتی",
     "کاروان زیارتی",
     "کاروان کربلا",
-    "کاروان عتبات",
     "ظرفیت محدود",
-    "فرصت محدود",
     "رزرو کنید",
-    "رزرو تور",
-    "پذیرش مشتری",
     "مشاوره رایگان",
-    "تضمینی",
-    "شماره تماس جهت ثبت نام",
 ]
 
-# پیام‌های غیرخبری
 NON_NEWS_WORDS = [
     "تبریک و تهنیت",
     "تبریک عرض می نماییم",
@@ -137,7 +129,6 @@ NON_NEWS_WORDS = [
     "یادبود شخصی",
 ]
 
-# اطلاعیه‌هایی که باید حفظ شوند
 IMPORTANT_NOTICE_WORDS = [
     "تعطیلی مدارس",
     "مدارس تعطیل",
@@ -161,9 +152,90 @@ IMPORTANT_NOTICE_WORDS = [
     "اطلاعیه مدیریت بحران",
 ]
 
+MEMORIAL_PHRASES = [
+    "مراسم سومین و هفتمین روز",
+    "مراسم سوم و هفتم",
+    "مراسم سومین روز",
+    "مراسم هفتمین روز",
+    "اولین سالگرد درگذشت",
+    "دومین سالگرد درگذشت",
+    "سالگرد درگذشت",
+    "مجلس ترحیم",
+    "آگهی ترحیم",
+    "اطلاعیه ترحیم",
+    "مراسم چهلم",
+    "چهلمین روز درگذشت",
+    "مراسم سوم",
+    "مراسم هفتم",
+    "یادبود مرحوم",
+    "یادبود مرحومه",
+    "مراسم یادبود",
+    "مجلس یادبود",
+]
+
+MUSIC_WORDS = [
+    "آهنگساز",
+    "خواننده",
+    "ترانه سرا",
+    "ترانه‌سرا",
+    "متن آهنگ",
+    "موزیک",
+    "آلبوم موسیقی",
+    "قطعه موسیقی",
+    "آهنگ جدید",
+    "اثری از خواننده",
+]
+
+CEREMONIAL_WORDS = [
+    "گرامیداشت هفته بسیج",
+    "هفته بسیج گرامی باد",
+    "فرارسیدن هفته بسیج",
+    "بسم الله الرحمن الرحیم",
+    "پیام فرمانده",
+    "پیام تبریک فرمانده",
+]
+
+REAL_EVENT_WORDS = [
+    "برگزار شد",
+    "آغاز شد",
+    "افتتاح شد",
+    "افتتاحیه",
+    "شرکت کردند",
+    "شرکت کرد",
+    "حضور یافت",
+    "مسابقات",
+    "مسابقه",
+    "بازدید",
+    "تصادف",
+    "حادثه",
+    "امدادرسانی",
+    "نجات",
+    "دستگیری",
+    "آتش سوزی",
+    "آتش‌سوزی",
+    "توسعه",
+    "پیگیری",
+    "تجهیز",
+    "راه اندازی",
+    "راه‌اندازی",
+    "قهرمان",
+    "کسب مقام",
+    "مدال",
+    "افتتاح",
+    "بهره برداری",
+    "بهره‌برداری",
+    "کلنگ زنی",
+    "کلنگ‌زنی",
+    "توزیع شد",
+    "پروژه عمرانی",
+    "برنامه اجرا",
+    "برنامه‌های اجرا",
+    "برنامه های اجرا",
+]
+
 
 # =====================================
-# آمار
+# آمار منابع
 # =====================================
 
 source_counts = {}
@@ -179,7 +251,7 @@ def register_error(name, error):
 
 
 # =====================================
-# پاک‌سازی و یکسان‌سازی متن
+# پاک‌سازی متن
 # =====================================
 
 def clean_text(text):
@@ -203,13 +275,21 @@ def normalize_text(text):
         .replace("\u200c", " ")
     )
 
+    # تبدیل اعداد فارسی و عربی به انگلیسی
+    persian_digits = "۰۱۲۳۴۵۶۷۸۹"
+    arabic_digits = "٠١٢٣٤٥٦٧٨٩"
+
+    for i in range(10):
+        text = text.replace(persian_digits[i], str(i))
+        text = text.replace(arabic_digits[i], str(i))
+
     text = re.sub(r"[^\w\s]", " ", text)
 
     return " ".join(text.split()).lower()
 
 
 # =====================================
-# تشخیص تبلیغ و پیام غیرخبری
+# تشخیص اطلاعیه مهم
 # =====================================
 
 def is_important_notice(text):
@@ -222,27 +302,143 @@ def is_important_notice(text):
     )
 
 
+# =====================================
+# تشخیص رویداد واقعی
+# =====================================
+
+def has_real_event(text):
+
+    normalized = normalize_text(text)
+
+    return any(
+        normalize_text(word) in normalized
+        for word in REAL_EVENT_WORDS
+    )
+
+
+# =====================================
+# تشخیص آگهی ترحیم
+# =====================================
+
+def is_memorial_announcement(title, description):
+
+    text = normalize_text(title + " " + description)
+
+    if any(
+        normalize_text(word) in text
+        for word in MEMORIAL_PHRASES
+    ):
+        return True
+
+    memorial_context = [
+        "مرحوم",
+        "مرحومه",
+        "درگذشت",
+        "فوت",
+    ]
+
+    private_context = [
+        "خانواده",
+        "بازماندگان",
+        "مسجد",
+        "مراسم",
+        "مجلس",
+        "سالگرد",
+    ]
+
+    has_memorial = any(
+        word in text
+        for word in memorial_context
+    )
+
+    has_private_context = any(
+        word in text
+        for word in private_context
+    )
+
+    return has_memorial and has_private_context
+
+
+# =====================================
+# تشخیص محتوای موسیقی
+# =====================================
+
+def is_music_content(title, description):
+
+    text = normalize_text(title + " " + description)
+
+    music_count = sum(
+        1 for word in MUSIC_WORDS
+        if normalize_text(word) in text
+    )
+
+    if music_count >= 2:
+        return True
+
+    if "متن ترانه" in text and music_count >= 1:
+        return True
+
+    return False
+
+
+# =====================================
+# تشخیص پیام مناسبتی بدون خبر
+# =====================================
+
+def is_empty_ceremonial_message(title, description):
+
+    text = normalize_text(title + " " + description)
+
+    has_ceremonial = any(
+        normalize_text(word) in text
+        for word in CEREMONIAL_WORDS
+    )
+
+    if not has_ceremonial:
+        return False
+
+    if has_real_event(text):
+        return False
+
+    has_program = "برنامه" in text
+    has_number = bool(re.search(r"\d+", text))
+
+    if has_program and has_number:
+        return False
+
+    return True
+
+
+# =====================================
+# فیلتر اصلی تبلیغات
+# =====================================
+
 def is_advertisement(title, description):
 
     text = normalize_text(title + " " + description)
 
-    # اطلاعیه‌های ضروری حذف نشوند
     if is_important_notice(text):
         return False, ""
 
-    # پیام‌های تبریک و تسلیت غیرخبری
+    if is_memorial_announcement(title, description):
+        return True, "آگهی مراسم ترحیم و یادبود خانوادگی"
+
     for word in NON_NEWS_WORDS:
 
         if normalize_text(word) in text:
             return True, "پیام تبریک یا تسلیت غیرخبری"
 
-    # تبلیغات صریح
+    if is_music_content(title, description):
+        return True, "محتوای موسیقی غیرخبری"
+
+    if is_empty_ceremonial_message(title, description):
+        return True, "متن مناسبتی بدون خبر مشخص"
+
     for word in AD_WORDS:
 
         if normalize_text(word) in text:
             return True, "عبارت تبلیغاتی: " + word
 
-    # تشخیص شماره تماس همراه با عبارت‌های تجاری
     commercial_words = [
         "فروش",
         "خرید",
@@ -256,7 +452,6 @@ def is_advertisement(title, description):
 
     has_phone = bool(
         re.search(r"09\d{9}", text)
-        or re.search(r"۰۹[۰-۹]{9}", text)
     )
 
     has_commercial_word = any(
@@ -592,7 +787,7 @@ def fetch_telegram_channel(name, username):
 
 
 # =====================================
-# جست‌وجوی Bing
+# جست‌وجوی Bing News
 # =====================================
 
 def search_bing(query):
@@ -673,7 +868,7 @@ def is_duplicate(news, accepted_news):
 
 
 # =====================================
-# جست‌وجوی اصلی
+# جست‌وجوی اصلی اخبار
 # =====================================
 
 def search_news():
@@ -760,7 +955,7 @@ def search_news():
 
             ad_count += 1
 
-            if len(removed_ads) < 10:
+            if len(removed_ads) < 20:
 
                 removed_ads.append({
                     "title": title,
@@ -788,7 +983,7 @@ def search_news():
         local_news.append(news)
 
     # =================================
-    # مرتب‌سازی
+    # مرتب‌سازی خبرها
     # =================================
 
     local_news.sort(
@@ -797,7 +992,7 @@ def search_news():
     )
 
     # =================================
-    # حذف تکراری‌ها
+    # حذف خبرهای تکراری
     # =================================
 
     final_news = []
@@ -816,7 +1011,7 @@ def search_news():
 
     print("\n")
     print("=" * 45)
-    print("گزارش نهایی جست‌وجوی اخبار شهرستان شفت")
+    print("گزارش نهایی جست‌وجوی اخبار شهرستان شفت - نسخه 26")
     print("=" * 45)
 
     print("بازه بررسی:", DAYS_BACK, "روز اخیر")
@@ -830,6 +1025,10 @@ def search_news():
     print("موارد خالی:", empty_count)
     print("خبرهای محلی در بازه زمانی:", len(local_news))
     print("خبرهای تکراری حذف‌شده:", duplicate_count)
+
+    # =================================
+    # آمار منابع
+    # =================================
 
     print("\n")
     print("=" * 45)
@@ -891,10 +1090,15 @@ def search_news():
         print("لینک:", news["link"])
 
     print("\nپایان گزارش")
+    print("نسخه 26 اجرا شد.")
     print("انتشار خودکار غیرفعال است.")
 
     return final_news
 
+
+# =====================================
+# اجرای برنامه
+# =====================================
 
 if __name__ == "__main__":
 
