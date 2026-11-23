@@ -30,8 +30,16 @@ def search_news(query):
         )
         response.raise_for_status()
 
-        root = ET.fromstring(response.content)
-        items = root.findall(".//item")
+       print("وضعیت پاسخ:", response.status_code)
+print("آدرس پاسخ:", response.url)
+print("نوع پاسخ:", response.headers.get("Content-Type"))
+print("ابتدای محتوای دریافتی:")
+print(response.text[:500])
+
+root = ET.fromstring(response.content)
+print("نوع سند:", root.tag)
+
+items = root.findall(".//item") 
         print("تعداد خبرهای پیدا شده:", len(items))
 
         for item in items:
