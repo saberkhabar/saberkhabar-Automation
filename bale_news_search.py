@@ -1,117 +1,82 @@
 
 import requests
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin
+import xml.etree.ElementTree as ET
+import re
+import html
 
-PAGE_URL = "https://khabarfarsi.com/city/1138"
+RSS_URL = "https://www.mehrnews.com/rss"
 
-LOCAL_MARKERS = [
+LOCAL_WORDS = [
     "شهرستان شفت",
     "شفت گیلان",
     "فرماندار شفت",
-    "پلیس شفت",
-    "مردم شفت",
-    "شفتی",
+    "شفت-",
     "احمدسرگوراب",
+    "احمد سرگوراب",
+    "امامزاده ابراهیم",
+    "چوبر",
     "ملاسرا",
     "نصیرمحله",
-    "چوبر",
     "جیرده",
-    "امامزاده ابراهیم",
-    "کلاشم",
-    "گوراب پس"
+    "سیاهمزگی",
+    "ویسرود",
+    "لاسک",
+    "بداب",
+    "خرمکش",
+    "علیسرا"
 ]
 
-BAD_MARKERS = [
-    "شفت گیربکس",
-    "شفت ورودی",
-    "شفت موتور",
-    "شفت بالانسر",
-    "بلبرینگ",
-    "صفحه کلاچ",
-    "شفت انتقال قدرت"
-]
+def clean_text(text):
+    text = html.unescape(text or "")
+    text = re.sub(r"<[^>]+>", " ", text)
+    return " ".join(text.split())
 
-def get_news():
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
-
+def search_news():
     try:
         response = requests.get(
-            PAGE_URL,
-            headers=headers,
+            RSS_URL,
+            headers={"User-Agent": "Mozilla/5.0"},
             timeout=30
         )
 
         print("وضعیت اتصال:", response.status_code)
         response.raise_for_status()
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        root = ET.fromstring(response.content)
+        items = root.findall(".//item")
 
-        headings = soup.select("h2, h3")
-        print("تعداد عنوان‌های صفحه:", len(headings))
+        print("تعداد کل خبرهای دریافتی:", len(items))
 
-        news = []
-        seen_links = set()
+        found = []
 
-        for heading in headings:
-            link_tag = heading.find("a", href=True)
+        for item in items:
+            title = clean_text(item.findtext("title", ""))
+            description = clean_text(
+                item.findtext("description", "")
+            )
+            link = item.findtext("link", "")
+            pub_date = item.findtext("pubDate", "")
 
-            if not link_tag:
-                continue
+            combined = title + " " + description
 
-            title = link_tag.get_text(" ", strip=True)
+            if any(word in combined for word in LOCAL_WORDS):
+                found.append({
+                    "title": title,
+                    "link": link,
+                    "date": pub_date
+                })
 
-            if len(title) < 8:
-                continue
+        print("تعداد خبرهای مرتبط احتمالی با شفت:", len(found))
 
-            card = heading
-
-            for _ in range(3):
-                if card.parent:
-                    card = card.parent
-
-            card_text = card.get_text(" ", strip=True)
-            combined = title + " " + card_text
-
-            if not any(
-                marker in combined for marker in LOCAL_MARKERS
-            ):
-                continue
-
-            if any(
-                marker in title for marker in BAD_MARKERS
-            ):
-                continue
-
-            link = urljoin(PAGE_URL, link_tag["href"])
-
-            if link in seen_links:
-                continue
-
-            seen_links.add(link)
-
-            excerpt = card_text.replace(title, "", 1).strip()
-
-            news.append({
-                "title": title,
-                "link": link,
-                "excerpt": excerpt[:300]
-            })
-
-        print("تعداد خبرهای محلی احتمالی:", len(news))
-
-        for item in news[:20]:
-            print("\n" + "=" * 40)
-            print("عنوان:", item["title"])
-            print("منبع گردآورنده: خبر فارسی")
-            print("لینک:", item["link"])
-            print("خلاصه صفحه:", item["excerpt"])
+        for news in found:
+            print("\n-------------------------")
+            print("عنوان:", news["title"])
+            print("منبع: خبرگزاری مهر")
+            print("تاریخ:", news["date"])
+            print("لینک:", news["link"])
 
     except Exception as error:
-        print("خطا در دریافت خبرها:", error)
-
+        print("خطا در دریافت خبر:", error)
 
 if __name__ == "__main__":
-    get_news()
+    search_news()
