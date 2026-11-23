@@ -1,54 +1,117 @@
 
 import requests
-import xml.etree.ElementTree as ET
-from urllib.parse import urlencode
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
-SEARCHES = [
-    "شفت",
-    "شفت گیلان",
+PAGE_URL = "https://khabarfarsi.com/city/1138"
+
+LOCAL_MARKERS = [
     "شهرستان شفت",
+    "شفت گیلان",
+    "فرماندار شفت",
+    "پلیس شفت",
+    "مردم شفت",
+    "شفتی",
     "احمدسرگوراب",
-    "ملاسرا شفت",
-    "نصیرمحله شفت",
-    "روستاهای شفت"
+    "ملاسرا",
+    "نصیرمحله",
+    "چوبر",
+    "جیرده",
+    "امامزاده ابراهیم",
+    "کلاشم",
+    "گوراب پس"
 ]
 
-def search_news(query):
-    params = {
-        "q": query,
-        "hl": "fa-IR",
-        "gl": "IR",
-        "ceid": "IR:fa"
-    }
+BAD_MARKERS = [
+    "شفت گیربکس",
+    "شفت ورودی",
+    "شفت موتور",
+    "شفت بالانسر",
+    "بلبرینگ",
+    "صفحه کلاچ",
+    "شفت انتقال قدرت"
+]
 
-    url = "https://news.google.com/rss/search?" + urlencode(params)
+def get_news():
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
 
     try:
         response = requests.get(
-            url,
-            headers={"User-Agent": "Mozilla/5.0"},
+            PAGE_URL,
+            headers=headers,
             timeout=30
         )
 
+        print("وضعیت اتصال:", response.status_code)
         response.raise_for_status()
 
-        root = ET.fromstring(response.content)
-        channel = root.find("channel")
-        items = channel.findall("item") if channel is not None else []
+        soup = BeautifulSoup(response.text, "html.parser")
 
-        print("\nجست‌وجو:", query)
-        print("تعداد خبر:", len(items))
+        headings = soup.select("h2, h3")
+        print("تعداد عنوان‌های صفحه:", len(headings))
 
-        for item in items:
-            print("--------------------")
-            print("عنوان:", item.findtext("title", ""))
-            print("لینک:", item.findtext("link", ""))
-            print("تاریخ:", item.findtext("pubDate", ""))
+        news = []
+        seen_links = set()
+
+        for heading in headings:
+            link_tag = heading.find("a", href=True)
+
+            if not link_tag:
+                continue
+
+            title = link_tag.get_text(" ", strip=True)
+
+            if len(title) < 8:
+                continue
+
+            card = heading
+
+            for _ in range(3):
+                if card.parent:
+                    card = card.parent
+
+            card_text = card.get_text(" ", strip=True)
+            combined = title + " " + card_text
+
+            if not any(
+                marker in combined for marker in LOCAL_MARKERS
+            ):
+                continue
+
+            if any(
+                marker in title for marker in BAD_MARKERS
+            ):
+                continue
+
+            link = urljoin(PAGE_URL, link_tag["href"])
+
+            if link in seen_links:
+                continue
+
+            seen_links.add(link)
+
+            excerpt = card_text.replace(title, "", 1).strip()
+
+            news.append({
+                "title": title,
+                "link": link,
+                "excerpt": excerpt[:300]
+            })
+
+        print("تعداد خبرهای محلی احتمالی:", len(news))
+
+        for item in news[:20]:
+            print("\n" + "=" * 40)
+            print("عنوان:", item["title"])
+            print("منبع گردآورنده: خبر فارسی")
+            print("لینک:", item["link"])
+            print("خلاصه صفحه:", item["excerpt"])
 
     except Exception as error:
-        print("خطا:", error)
+        print("خطا در دریافت خبرها:", error)
 
 
 if __name__ == "__main__":
-    for query in SEARCHES:
-        search_news(query)
+    get_news()
