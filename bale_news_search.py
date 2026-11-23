@@ -1,9 +1,10 @@
 
-import requests
-import xml.etree.ElementTree as ET
+import os
 import re
 import html
 import time
+import requests
+import xml.etree.ElementTree as ET
 
 from bs4 import BeautifulSoup
 from difflib import SequenceMatcher
@@ -13,13 +14,12 @@ from urllib.parse import urlparse, parse_qs, urljoin
 
 
 # =====================================================
-# نسخه 27 - جست‌وجوی اخبار شهرستان شفت
+# نسخه 28 - اخبار شهرستان شفت همراه تصویر
 # انتشار خودکار غیرفعال است.
 # =====================================================
 
-VERSION = 27
+VERSION = 28
 DAYS_BACK = 7
-
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 RSS_SOURCES = {
@@ -56,33 +56,15 @@ BING_QUERIES = [
 ]
 
 LOCAL_WORDS = [
-    "شفت",
-    "شهرستان شفت",
-    "احمدسرگوراب",
-    "احمد سرگوراب",
-    "امامزاده ابراهیم",
-    "سیاهمزگی",
-    "چوبر",
-    "نصیرمحله",
-    "نصیر محله",
-    "جیرده",
-    "ملاسرا",
-    "ویسرود",
-    "لاسک",
-    "بداب",
-    "خرمکش",
-    "علیسرا",
-    "شالده",
-    "خمیران",
-    "گوراب پس",
-    "چماچا",
-    "چناررودخان",
+    "شفت", "شهرستان شفت",
+    "احمدسرگوراب", "احمد سرگوراب",
+    "امامزاده ابراهیم", "سیاهمزگی",
+    "چوبر", "نصیرمحله", "نصیر محله",
+    "جیرده", "ملاسرا", "ویسرود",
+    "لاسک", "بداب", "خرمکش",
+    "علیسرا", "شالده", "خمیران",
+    "گوراب پس", "چماچا", "چناررودخان",
 ]
-
-
-# =====================================================
-# عبارت‌های تبلیغاتی کانال
-# =====================================================
 
 PROMOTION_MARKERS = [
     "کانال شفت خبر در تلگرام",
@@ -104,42 +86,24 @@ PROMOTION_MARKERS = [
 ]
 
 PROMOTION_URL_RE = re.compile(
-    r"(https?://)?(t\.me/|telegram\.me/|ble\.ir/|eitaa\.com/|rubika\.ir/)",
+    r"(https?://)?(t\.me/|telegram\.me/|ble\.ir/|"
+    r"eitaa\.com/|rubika\.ir/)",
     re.IGNORECASE,
 )
 
-
-# =====================================================
-# فیلتر تبلیغات و پیام‌های غیرخبری
-# =====================================================
-
 AD_WORDS = [
-    "تخفیف ویژه",
-    "فروش ویژه",
-    "حراج",
-    "قیمت استثنایی",
-    "خرید مستقیم",
-    "فروش فوری",
-    "فروش اقساطی",
-    "ارسال رایگان",
-    "سفارش دهید",
-    "جهت سفارش",
-    "جهت خرید",
-    "ثبت سفارش",
-    "تماس جهت خرید",
-    "معرفی محصول",
-    "محصولات ما",
-    "خدمات ما",
-    "نمایندگی فروش",
-    "فروشگاه",
-    "تبلیغات",
-    "آگهی تبلیغاتی",
-    "تور گردشگری",
-    "تور زیارتی",
-    "کاروان زیارتی",
-    "کاروان کربلا",
-    "ظرفیت محدود",
-    "رزرو کنید",
+    "تخفیف ویژه", "فروش ویژه", "حراج",
+    "قیمت استثنایی", "خرید مستقیم",
+    "فروش فوری", "فروش اقساطی",
+    "ارسال رایگان", "سفارش دهید",
+    "جهت سفارش", "جهت خرید", "ثبت سفارش",
+    "تماس جهت خرید", "معرفی محصول",
+    "محصولات ما", "خدمات ما",
+    "نمایندگی فروش", "فروشگاه",
+    "تبلیغات", "آگهی تبلیغاتی",
+    "تور گردشگری", "تور زیارتی",
+    "کاروان زیارتی", "کاروان کربلا",
+    "ظرفیت محدود", "رزرو کنید",
     "مشاوره رایگان",
 ]
 
@@ -160,39 +124,24 @@ NON_NEWS_WORDS = [
 ]
 
 IMPORTANT_NOTICE_WORDS = [
-    "تعطیلی مدارس",
-    "مدارس تعطیل",
-    "غیرحضوری شدن مدارس",
-    "غیرحضوری مدارس",
-    "قطعی آب",
-    "قطعی برق",
-    "افت فشار آب",
-    "قطعی گاز",
-    "هشدار هواشناسی",
-    "هشدار سیل",
-    "هشدار بارندگی",
-    "هشدار زلزله",
-    "اطلاعیه فرمانداری",
+    "تعطیلی مدارس", "مدارس تعطیل",
+    "غیرحضوری شدن مدارس", "غیرحضوری مدارس",
+    "قطعی آب", "قطعی برق", "افت فشار آب",
+    "قطعی گاز", "هشدار هواشناسی",
+    "هشدار سیل", "هشدار بارندگی",
+    "هشدار زلزله", "اطلاعیه فرمانداری",
     "اطلاعیه بخشداری",
     "اطلاعیه آموزش و پرورش",
     "اطلاعیه آب و فاضلاب",
-    "اطلاعیه برق",
-    "اطلاعیه اورژانس",
-    "اطلاعیه پلیس",
-    "اطلاعیه مدیریت بحران",
+    "اطلاعیه برق", "اطلاعیه اورژانس",
+    "اطلاعیه پلیس", "اطلاعیه مدیریت بحران",
 ]
 
 MUSIC_WORDS = [
-    "آهنگساز",
-    "خواننده",
-    "ترانه سرا",
-    "ترانه‌سرا",
-    "متن آهنگ",
-    "موزیک",
-    "آلبوم موسیقی",
-    "قطعه موسیقی",
-    "آهنگ جدید",
-    "اثری از خواننده",
+    "آهنگساز", "خواننده", "ترانه سرا",
+    "ترانه‌سرا", "متن آهنگ", "موزیک",
+    "آلبوم موسیقی", "قطعه موسیقی",
+    "آهنگ جدید", "اثری از خواننده",
 ]
 
 CEREMONIAL_WORDS = [
@@ -205,64 +154,28 @@ CEREMONIAL_WORDS = [
 ]
 
 REAL_EVENT_WORDS = [
-    "برگزار شد",
-    "آغاز شد",
-    "افتتاح شد",
-    "افتتاحیه",
-    "شرکت کردند",
-    "شرکت کرد",
-    "حضور یافت",
-    "مسابقات",
-    "مسابقه",
-    "بازدید",
-    "تصادف",
-    "حادثه",
-    "امدادرسانی",
-    "نجات",
-    "دستگیری",
-    "آتش سوزی",
-    "آتش‌سوزی",
-    "توسعه",
-    "پیگیری",
-    "تجهیز",
-    "راه اندازی",
-    "راه‌اندازی",
-    "قهرمان",
-    "کسب مقام",
-    "مدال",
-    "افتتاح",
-    "بهره برداری",
-    "بهره‌برداری",
-    "کلنگ زنی",
-    "کلنگ‌زنی",
-    "توزیع شد",
-    "پروژه عمرانی",
-    "برنامه اجرا",
-    "برنامه‌های اجرا",
-    "برنامه های اجرا",
-    "یادواره شهدا",
-    "یادواره شهدای",
+    "برگزار شد", "آغاز شد", "افتتاح شد",
+    "افتتاحیه", "شرکت کردند", "شرکت کرد",
+    "حضور یافت", "مسابقات", "مسابقه",
+    "بازدید", "تصادف", "حادثه",
+    "امدادرسانی", "نجات", "دستگیری",
+    "آتش سوزی", "آتش‌سوزی",
+    "توسعه", "پیگیری", "تجهیز",
+    "راه اندازی", "راه‌اندازی",
+    "قهرمان", "کسب مقام", "مدال",
+    "افتتاح", "بهره برداری", "بهره‌برداری",
+    "کلنگ زنی", "کلنگ‌زنی", "توزیع شد",
+    "پروژه عمرانی", "برنامه اجرا",
+    "برنامه‌های اجرا", "برنامه های اجرا",
+    "یادواره شهدا", "یادواره شهدای",
 ]
-
-
-# =====================================================
-# آمار منابع
-# =====================================================
 
 source_counts = {}
 source_errors = {}
 
 
-def register_source(name, count):
-    source_counts[name] = count
-
-
-def register_error(name, error):
-    source_errors[name] = str(error)
-
-
 # =====================================================
-# پاک‌سازی و یکسان‌سازی متن
+# پاک‌سازی متن
 # =====================================================
 
 def clean_text(text):
@@ -291,12 +204,19 @@ def normalize_text(text):
         text = text.replace(arabic_digits[i], str(i))
 
     text = re.sub(r"[^\w\s]", " ", text)
-
     return " ".join(text.split()).lower()
 
 
+def register_source(name, count):
+    source_counts[name] = count
+
+
+def register_error(name, error):
+    source_errors[name] = str(error)
+
+
 # =====================================================
-# حذف تبلیغات انتهای متن خبر
+# حذف تبلیغات انتهای متن
 # =====================================================
 
 def strip_channel_promotion(text):
@@ -324,269 +244,102 @@ def strip_channel_promotion(text):
     raw = re.sub(r"<[^>]+>", " ", raw)
 
     lowered = raw.lower()
-    cut_positions = []
+    positions = []
 
     for marker in PROMOTION_MARKERS:
         pos = lowered.find(marker.lower())
-
         if pos >= 0:
-            cut_positions.append(pos)
+            positions.append(pos)
 
-    if cut_positions:
-        raw = raw[:min(cut_positions)]
+    if positions:
+        raw = raw[:min(positions)]
         return clean_text(raw), True
 
-    kept_lines = []
+    kept = []
     removed = False
 
     for line in raw.splitlines():
 
-        line_clean = line.strip()
-        low = line_clean.lower()
+        low = line.lower()
 
-        is_channel_line = (
+        promotional = (
             "@shaft_khabar" in low
-            or "ما را دنبال کنید" in line_clean
-            or "ما رو دنبال کنید" in line_clean
-            or "به کانال بپیوندید" in line_clean
-            or "عضو کانال شوید" in line_clean
-            or bool(PROMOTION_URL_RE.search(line_clean))
+            or "ما را دنبال کنید" in line
+            or "ما رو دنبال کنید" in line
+            or "به کانال بپیوندید" in line
+            or "عضو کانال شوید" in line
+            or bool(PROMOTION_URL_RE.search(line))
         )
 
-        if is_channel_line:
+        if promotional:
             removed = True
-            continue
+        else:
+            kept.append(line)
 
-        kept_lines.append(line)
-
-    return clean_text("\n".join(kept_lines)), removed
+    return clean_text("\n".join(kept)), removed
 
 
 def prepare_news_text(title, description):
 
-    clean_title, title_promo = strip_channel_promotion(title)
+    title, title_promo = strip_channel_promotion(title)
+    description, desc_promo = strip_channel_promotion(description)
 
-    clean_description, desc_promo = strip_channel_promotion(
-        description
-    )
-
-    return (
-        clean_title,
-        clean_description,
-        title_promo or desc_promo
-    )
+    return title, description, title_promo or desc_promo
 
 
 # =====================================================
-# تشخیص اطلاعیه مهم
+# استخراج تصویر از RSS
 # =====================================================
 
-def is_important_notice(text):
+def get_image_url(item):
 
-    normalized = normalize_text(text)
+    # تصویرهای enclosure، media:content و media:thumbnail
+    for element in item.iter():
 
-    return any(
-        normalize_text(word) in normalized
-        for word in IMPORTANT_NOTICE_WORDS
-    )
+        tag = element.tag.split("}")[-1].lower()
 
+        if tag in ("content", "thumbnail", "enclosure"):
 
-# =====================================================
-# تشخیص رویداد واقعی
-# =====================================================
+            image_url = element.attrib.get("url", "")
 
-def has_real_event(text):
+            media_type = element.attrib.get("type", "").lower()
 
-    normalized = normalize_text(text)
+            if image_url and (
+                tag != "enclosure"
+                or media_type.startswith("image/")
+                or not media_type
+            ):
+                return image_url
 
-    return any(
-        normalize_text(word) in normalized
-        for word in REAL_EVENT_WORDS
-    )
+    # جست‌وجوی تصویر در توضیحات HTML خبر
+    for element in item.iter():
 
+        tag = element.tag.split("}")[-1].lower()
 
-# =====================================================
-# حذف آگهی ترحیم خانوادگی
-# حفظ یادواره شهدا و مراسم عمومی
-# =====================================================
+        if tag in ("description", "encoded", "content"):
 
-def is_memorial_announcement(title, description):
+            raw = "".join(element.itertext())
 
-    text = normalize_text(title + " " + description)
+            soup = BeautifulSoup(raw, "html.parser")
 
-    if (
-        "یادواره شهدا" in text
-        or "یادواره شهدای" in text
-    ):
-        return False
+            img = soup.find("img")
 
-    death_words = [
-        "مرحوم",
-        "مرحومه",
-        "درگذشت",
-        "فوت",
-        "مصیبت وارده",
-    ]
+            if img:
 
-    private_words = [
-        "خانواده",
-        "بازماندگان",
-        "پدر",
-        "مادر",
-        "همسر",
-        "فرزند",
-        "برادر",
-        "خواهر",
-        "مجلس ترحیم",
-        "آگهی ترحیم",
-        "مراسم سوم",
-        "مراسم هفتم",
-        "مراسم چهلم",
-        "سالگرد درگذشت",
-        "یادبود مرحوم",
-    ]
+                image_url = (
+                    img.get("src")
+                    or img.get("data-src")
+                    or img.get("data-original")
+                )
 
-    has_death = any(
-        normalize_text(word) in text
-        for word in death_words
-    )
+                if image_url:
+                    return image_url
 
-    has_private = any(
-        normalize_text(word) in text
-        for word in private_words
-    )
-
-    return has_death and has_private
+    return ""
 
 
 # =====================================================
-# تشخیص محتوای موسیقی
-# =====================================================
-
-def is_music_content(title, description):
-
-    text = normalize_text(title + " " + description)
-
-    music_count = sum(
-        1 for word in MUSIC_WORDS
-        if normalize_text(word) in text
-    )
-
-    if music_count >= 2:
-        return True
-
-    if "متن ترانه" in text and music_count >= 1:
-        return True
-
-    return False
-
-
-# =====================================================
-# تشخیص پیام مناسبتی بدون خبر
-# =====================================================
-
-def is_empty_ceremonial_message(title, description):
-
-    text = normalize_text(title + " " + description)
-
-    has_ceremonial = any(
-        normalize_text(word) in text
-        for word in CEREMONIAL_WORDS
-    )
-
-    if not has_ceremonial:
-        return False
-
-    if has_real_event(text):
-        return False
-
-    has_program = "برنامه" in text
-    has_number = bool(re.search(r"\d+", text))
-
-    return not (has_program and has_number)
-
-
-# =====================================================
-# فیلتر اصلی تبلیغات
-# =====================================================
-
-def is_advertisement(title, description):
-
-    text = normalize_text(title + " " + description)
-
-    if is_important_notice(text):
-        return False, ""
-
-    if is_memorial_announcement(title, description):
-        return True, "آگهی ترحیم خانوادگی"
-
-    for word in NON_NEWS_WORDS:
-
-        if normalize_text(word) in text:
-            return True, "پیام تبریک یا تسلیت غیرخبری"
-
-    if is_music_content(title, description):
-        return True, "محتوای موسیقی غیرخبری"
-
-    if is_empty_ceremonial_message(title, description):
-        return True, "متن مناسبتی بدون خبر مشخص"
-
-    for word in AD_WORDS:
-
-        if normalize_text(word) in text:
-            return True, "عبارت تبلیغاتی: " + word
-
-    commercial_words = [
-        "فروش",
-        "خرید",
-        "سفارش",
-        "ثبت نام",
-        "رزرو",
-        "قیمت",
-        "محصول",
-        "خدمات",
-    ]
-
-    has_phone = bool(
-        re.search(r"09\d{9}", text)
-    )
-
-    has_commercial = any(
-        normalize_text(word) in text
-        for word in commercial_words
-    )
-
-    if has_phone and has_commercial:
-        return True, "شماره تماس همراه با عبارت تجاری"
-
-    return False, ""
-
-
-# =====================================================
-# استخراج لینک اصلی
-# =====================================================
-
-def extract_real_link(link):
-
-    if not link:
-        return ""
-
-    try:
-
-        parsed = urlparse(link)
-        params = parse_qs(parsed.query)
-
-        if "url" in params:
-            return params["url"][0]
-
-    except Exception:
-        pass
-
-    return link.strip()
-
-
-# =====================================================
-# خواندن اطلاعات RSS
+# استخراج اطلاعات RSS
 # =====================================================
 
 def get_child_text(element, name):
@@ -598,11 +351,7 @@ def get_child_text(element, name):
         if tag == name.lower():
 
             if name.lower() == "link":
-
-                return child.attrib.get(
-                    "href",
-                    child.text or ""
-                )
+                return child.attrib.get("href", child.text or "")
 
             return " ".join(
                 part for part in child.itertext() if part
@@ -614,39 +363,28 @@ def get_child_text(element, name):
 def get_news_items(root):
 
     return [
-        element
-        for element in root.iter()
+        element for element in root.iter()
         if element.tag.split("}")[-1].lower()
         in ("item", "entry")
     ]
 
 
-# =====================================================
-# تشخیص خبر محلی
-# =====================================================
+def extract_real_link(link):
 
-def is_local_news(title, description):
+    if not link:
+        return ""
 
-    text = title + " " + description
+    try:
+        params = parse_qs(urlparse(link).query)
 
-    # هشتگ‌ها به تنهایی ملاک محلی بودن نیستند.
-    text = re.sub(
-        r"(?<!\S)#[\w\u0600-\u06FF]+",
-        " ",
-        text
-    )
+        if "url" in params:
+            return params["url"][0]
 
-    combined = normalize_text(text)
+    except Exception:
+        pass
 
-    return any(
-        normalize_text(word) in combined
-        for word in LOCAL_WORDS
-    )
+    return link.strip()
 
-
-# =====================================================
-# تبدیل تاریخ
-# =====================================================
 
 def parse_news_date(date_text):
 
@@ -654,7 +392,6 @@ def parse_news_date(date_text):
         return None
 
     try:
-
         date = parsedate_to_datetime(date_text)
 
         if date.tzinfo is None:
@@ -666,7 +403,6 @@ def parse_news_date(date_text):
         pass
 
     try:
-
         date = datetime.fromisoformat(
             date_text.replace("Z", "+00:00")
         )
@@ -677,19 +413,12 @@ def parse_news_date(date_text):
         return date.astimezone(timezone.utc)
 
     except Exception:
-
         return None
 
 
-# =====================================================
-# استخراج اطلاعات خبر از RSS
-# =====================================================
-
 def get_news_data(item):
 
-    title = clean_text(
-        get_child_text(item, "title")
-    )
+    title = clean_text(get_child_text(item, "title"))
 
     description = clean_text(
         get_child_text(item, "description")
@@ -709,15 +438,14 @@ def get_news_data(item):
         or get_child_text(item, "date")
     )
 
-    source = get_child_text(item, "source")
-
     return {
         "title": title,
         "description": description,
         "link": link,
         "date_text": date_text,
         "date": parse_news_date(date_text),
-        "source": clean_text(source),
+        "image_url": get_image_url(item),
+        "source": "",
     }
 
 
@@ -727,9 +455,6 @@ def get_news_data(item):
 
 def fetch_rss(name, url):
 
-    print("\n==============================")
-    print("منبع RSS:", name)
-
     try:
 
         response = requests.get(
@@ -738,50 +463,81 @@ def fetch_rss(name, url):
             timeout=20
         )
 
-        print("وضعیت اتصال:", response.status_code)
-
         response.raise_for_status()
 
         root = ET.fromstring(response.content)
-
         items = get_news_items(root)
-
-        print("تعداد خبرهای دریافتی:", len(items))
 
         news_list = []
 
         for item in items:
 
             news = get_news_data(item)
-            news["source"] = news["source"] or name
+            news["source"] = name
 
             news_list.append(news)
 
         register_source(name, len(news_list))
 
+        print(f"RSS دریافت شد: {len(news_list)} مورد")
+
         return news_list
 
     except Exception as error:
 
-        print("خطا در RSS:", error)
-
         register_source(name, 0)
         register_error(name, error)
+
+        print("خطا در دریافت یک منبع RSS")
 
         return []
 
 
 # =====================================================
-# دریافت پست‌های عمومی تلگرام
+# استخراج تصویر از تلگرام
+# =====================================================
+
+def get_telegram_image(block):
+
+    photo = block.select_one(
+        ".tgme_widget_message_photo_wrap"
+    )
+
+    if photo:
+
+        style = photo.get("style", "")
+
+        match = re.search(
+            r"background-image\s*:\s*url\(['\"]?(.*?)['\"]?\)",
+            style,
+            re.IGNORECASE
+        )
+
+        if match:
+            return html.unescape(match.group(1))
+
+    # تصویرهای احتمالی دیگر در پست
+    img = block.select_one(
+        ".tgme_widget_message_photo img"
+    )
+
+    if img:
+        return (
+            img.get("src")
+            or img.get("data-src")
+            or ""
+        )
+
+    return ""
+
+
+# =====================================================
+# دریافت پست‌های تلگرام
 # =====================================================
 
 def fetch_telegram_channel(name, username):
 
-    print("\n==============================")
-    print("کانال تلگرام:", name)
-
     url = f"https://t.me/s/{username}"
-
     news_list = []
 
     try:
@@ -791,8 +547,6 @@ def fetch_telegram_channel(name, username):
             headers=HEADERS,
             timeout=20
         )
-
-        print("وضعیت اتصال:", response.status_code)
 
         response.raise_for_status()
 
@@ -804,8 +558,6 @@ def fetch_telegram_channel(name, username):
         blocks = soup.select(
             "div.tgme_widget_message"
         )
-
-        print("تعداد پست‌های صفحه:", len(blocks))
 
         for block in blocks:
 
@@ -828,19 +580,15 @@ def fetch_telegram_channel(name, username):
             if not description:
                 continue
 
-            # حذف پست‌هایی که پس از حذف تبلیغ، متن خبری ندارند.
             if promo_found and len(normalize_text(description)) < 45:
                 continue
 
             time_element = block.select_one("time")
 
-            date_text = ""
-
-            if time_element:
-                date_text = time_element.get(
-                    "datetime",
-                    ""
-                )
+            date_text = (
+                time_element.get("datetime", "")
+                if time_element else ""
+            )
 
             date = parse_news_date(date_text)
 
@@ -851,7 +599,6 @@ def fetch_telegram_channel(name, username):
             link = ""
 
             if link_element:
-
                 href = link_element.get("href", "")
 
                 if href:
@@ -872,14 +619,13 @@ def fetch_telegram_channel(name, username):
                 title = title[:147] + "..."
 
             news_list.append({
-
                 "title": title,
                 "description": description,
                 "link": link,
                 "date_text": date_text,
                 "date": date,
+                "image_url": get_telegram_image(block),
                 "source": "تلگرام - " + name,
-
             })
 
         register_source(
@@ -887,14 +633,16 @@ def fetch_telegram_channel(name, username):
             len(news_list)
         )
 
+        print(f"پست تلگرام دریافت شد: {len(news_list)} مورد")
+
         return news_list
 
     except Exception as error:
 
-        print("خطا در تلگرام:", error)
-
         register_source("تلگرام - " + name, 0)
         register_error("تلگرام - " + name, error)
+
+        print("خطا در دریافت یک کانال تلگرام")
 
         return []
 
@@ -918,22 +666,17 @@ def search_bing(query):
             timeout=20
         )
 
-        print("\nجست‌وجوی Bing:", query)
-
         response.raise_for_status()
 
         root = ET.fromstring(response.content)
-
         items = get_news_items(root)
-
-        print("تعداد نتایج:", len(items))
 
         news_list = []
 
         for item in items:
 
             news = get_news_data(item)
-            news["source"] = news["source"] or "Bing News"
+            news["source"] = "Bing News"
 
             news_list.append(news)
 
@@ -941,15 +684,171 @@ def search_bing(query):
 
     except Exception as error:
 
-        print("خطا در Bing:", error)
+        register_error("Bing", error)
 
-        register_error("Bing: " + query, error)
+        print("خطا در جست‌وجوی Bing")
 
         return []
 
 
 # =====================================================
-# تشخیص خبر تکراری
+# فیلترهای محلی و خبری
+# =====================================================
+
+def is_local_news(title, description):
+
+    text = title + " " + description
+
+    text = re.sub(
+        r"(?<!\S)#[\w\u0600-\u06FF]+",
+        " ",
+        text
+    )
+
+    normalized = normalize_text(text)
+
+    return any(
+        normalize_text(word) in normalized
+        for word in LOCAL_WORDS
+    )
+
+
+def is_important_notice(text):
+
+    normalized = normalize_text(text)
+
+    return any(
+        normalize_text(word) in normalized
+        for word in IMPORTANT_NOTICE_WORDS
+    )
+
+
+def has_real_event(text):
+
+    normalized = normalize_text(text)
+
+    return any(
+        normalize_text(word) in normalized
+        for word in REAL_EVENT_WORDS
+    )
+
+
+def is_memorial_announcement(title, description):
+
+    text = normalize_text(title + " " + description)
+
+    if "یادواره شهدا" in text or "یادواره شهدای" in text:
+        return False
+
+    death_words = [
+        "مرحوم", "مرحومه", "درگذشت",
+        "فوت", "مصیبت وارده",
+    ]
+
+    private_words = [
+        "خانواده", "بازماندگان", "پدر",
+        "مادر", "همسر", "فرزند", "برادر",
+        "خواهر", "مجلس ترحیم", "آگهی ترحیم",
+        "مراسم سوم", "مراسم هفتم",
+        "مراسم چهلم", "سالگرد درگذشت",
+        "یادبود مرحوم",
+    ]
+
+    has_death = any(
+        normalize_text(word) in text
+        for word in death_words
+    )
+
+    has_private = any(
+        normalize_text(word) in text
+        for word in private_words
+    )
+
+    return has_death and has_private
+
+
+def is_music_content(title, description):
+
+    text = normalize_text(title + " " + description)
+
+    count = sum(
+        1 for word in MUSIC_WORDS
+        if normalize_text(word) in text
+    )
+
+    return count >= 2 or (
+        "متن ترانه" in text and count >= 1
+    )
+
+
+def is_empty_ceremonial_message(title, description):
+
+    text = normalize_text(title + " " + description)
+
+    has_ceremonial = any(
+        normalize_text(word) in text
+        for word in CEREMONIAL_WORDS
+    )
+
+    if not has_ceremonial:
+        return False
+
+    if has_real_event(text):
+        return False
+
+    has_program = "برنامه" in text
+    has_number = bool(re.search(r"\d+", text))
+
+    return not (has_program and has_number)
+
+
+def is_advertisement(title, description):
+
+    text = normalize_text(title + " " + description)
+
+    if is_important_notice(text):
+        return False, ""
+
+    if is_memorial_announcement(title, description):
+        return True, "آگهی ترحیم خانوادگی"
+
+    for word in NON_NEWS_WORDS:
+
+        if normalize_text(word) in text:
+            return True, "پیام تبریک یا تسلیت غیرخبری"
+
+    if is_music_content(title, description):
+        return True, "محتوای موسیقی غیرخبری"
+
+    if is_empty_ceremonial_message(title, description):
+        return True, "پیام مناسبتی بدون خبر مشخص"
+
+    for word in AD_WORDS:
+
+        if normalize_text(word) in text:
+            return True, "عبارت تبلیغاتی"
+
+    commercial_words = [
+        "فروش", "خرید", "سفارش",
+        "ثبت نام", "رزرو", "قیمت",
+        "محصول", "خدمات",
+    ]
+
+    has_phone = bool(re.search(r"09\d{9}", text))
+
+    has_commercial = any(
+        normalize_text(word) in text
+        for word in commercial_words
+    )
+
+    if has_phone and has_commercial:
+        return True, "شماره تماس همراه با عبارت تجاری"
+
+    return False, ""
+
+
+# =====================================================
+# تشخیص تکراری بودن خبر
 # =====================================================
 
 def is_duplicate(news, accepted_news):
@@ -981,7 +880,76 @@ def is_duplicate(news, accepted_news):
 
 
 # =====================================================
-# جست‌وجوی اصلی اخبار
+# ساخت گزارش تصویری GitHub Actions
+# =====================================================
+
+def write_github_summary(news_list):
+
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+
+    if not summary_path:
+        print("محیط GitHub Summary در دسترس نیست.")
+        return
+
+    lines = [
+        "# گزارش اخبار شهرستان شفت - نسخه 28",
+        "",
+        "محدوده: شفت، احمدسرگوراب و روستاهای مرتبط",
+        "",
+        "انتشار خودکار غیرفعال است.",
+        "",
+        "---",
+        "",
+    ]
+
+    if not news_list:
+        lines.append("خبری برای نمایش پیدا نشد.")
+
+    for index, news in enumerate(news_list, start=1):
+
+        title = news["title"].replace("\n", " ").strip()
+        description = news["description"].strip()
+        date_text = news["date_text"] or "نامشخص"
+        image_url = news.get("image_url", "").strip()
+
+        lines.append(f"## {index}. {title}")
+        lines.append("")
+        lines.append(description[:1000])
+        lines.append("")
+        lines.append(f"**تاریخ:** {date_text}")
+        lines.append("")
+
+        if image_url.startswith(("https://", "http://")):
+            lines.append(
+                f"![تصویر خبر {index}]({image_url})"
+            )
+            lines.append("")
+        else:
+            lines.append("*برای این خبر تصویری دریافت نشد.*")
+            lines.append("")
+
+        lines.append("---")
+        lines.append("")
+
+    try:
+
+        with open(
+            summary_path,
+            "a",
+            encoding="utf-8"
+        ) as file:
+
+            file.write("\n".join(lines))
+
+        print("گزارش تصویری در GitHub Actions ثبت شد.")
+
+    except Exception:
+
+        print("ثبت گزارش تصویری در GitHub Actions ناموفق بود.")
+
+
+# =====================================================
+# اجرای جست‌وجوی اصلی
 # =====================================================
 
 def search_news():
@@ -989,16 +957,12 @@ def search_news():
     all_news = []
 
     now = datetime.now(timezone.utc)
-
     date_limit = now - timedelta(days=DAYS_BACK)
 
     # دریافت RSS
     for name, url in RSS_SOURCES.items():
 
-        all_news.extend(
-            fetch_rss(name, url)
-        )
-
+        all_news.extend(fetch_rss(name, url))
         time.sleep(1)
 
     # دریافت تلگرام
@@ -1015,20 +979,16 @@ def search_news():
 
     for query in BING_QUERIES:
 
-        news_list = search_bing(query)
+        results = search_bing(query)
 
-        bing_count += len(news_list)
-
-        all_news.extend(news_list)
+        bing_count += len(results)
+        all_news.extend(results)
 
         time.sleep(1)
 
     register_source("Bing", bing_count)
 
-    # =============================================
-    # فیلتر خبرها
-    # =============================================
-
+    # شمارنده‌ها
     local_count = 0
     ad_count = 0
     old_count = 0
@@ -1037,31 +997,27 @@ def search_news():
     not_local_count = 0
     empty_count = 0
     promo_count = 0
+    image_count = 0
 
     local_news = []
     removed_ads = []
 
+    # فیلتر خبرها
     for news in all_news:
 
-        original_title = news["title"].strip()
-        original_description = news["description"].strip()
-
         title, description, promo_found = prepare_news_text(
-            original_title,
-            original_description
+            news["title"],
+            news["description"]
         )
 
         if promo_found:
             promo_count += 1
 
         if not title and not description:
-
             empty_count += 1
             continue
 
-        # فقط متن اصلی خبر برای تشخیص محلی بودن بررسی می‌شود.
         if not is_local_news(title, description):
-
             not_local_count += 1
             continue
 
@@ -1077,11 +1033,9 @@ def search_news():
             ad_count += 1
 
             if len(removed_ads) < 20:
-
                 removed_ads.append({
                     "title": title,
                     "reason": reason,
-                    "source": news["source"],
                 })
 
             continue
@@ -1089,17 +1043,14 @@ def search_news():
         date = news["date"]
 
         if date is None:
-
             missing_date_count += 1
             continue
 
         if date < date_limit:
-
             old_count += 1
             continue
 
         if date > now:
-
             future_count += 1
             continue
 
@@ -1108,38 +1059,31 @@ def search_news():
         cleaned_news["title"] = title or description[:120]
         cleaned_news["description"] = description
 
+        if cleaned_news.get("image_url"):
+            image_count += 1
+
         local_news.append(cleaned_news)
 
-    # =============================================
-    # مرتب‌سازی خبرها
-    # =============================================
-
+    # مرتب‌سازی جدیدترین خبرها
     local_news.sort(
         key=lambda item: item["date"],
         reverse=True
     )
 
-    # =============================================
-    # حذف خبرهای تکراری
-    # =============================================
-
+    # حذف تکراری‌ها
     final_news = []
 
     for news in local_news:
 
         if not is_duplicate(news, final_news):
-
             final_news.append(news)
 
     duplicate_count = len(local_news) - len(final_news)
 
-    # =============================================
-    # گزارش نهایی
-    # =============================================
-
+    # گزارش متنی
     print("\n")
     print("=" * 50)
-    print("گزارش نهایی اخبار شهرستان شفت - نسخه 27")
+    print("گزارش اخبار شهرستان شفت - نسخه 28")
     print("=" * 50)
 
     print("محدوده: شفت، احمدسرگوراب و روستاهای مرتبط")
@@ -1147,7 +1091,7 @@ def search_news():
     print("بازه بررسی:", DAYS_BACK, "روز اخیر")
 
     print("کل موارد دریافتی:", len(all_news))
-    print("موارد دارای متن تبلیغاتی کانال:", promo_count)
+    print("موارد دارای تبلیغات کانال:", promo_count)
     print("موارد محلی شناسایی‌شده:", local_count)
     print("تبلیغات حذف‌شده:", ad_count)
     print("خبرهای قدیمی:", old_count)
@@ -1157,72 +1101,42 @@ def search_news():
     print("موارد خالی:", empty_count)
     print("خبرهای محلی در بازه زمانی:", len(local_news))
     print("خبرهای تکراری حذف‌شده:", duplicate_count)
+    print("خبرهای دارای تصویر:", image_count)
+    print("خبرهای نهایی:", len(final_news))
 
-    # =============================================
-    # آمار منابع
-    # =============================================
+    # نمونه تبلیغات حذف‌شده، بدون نمایش نام منبع
+    print("\nنمونه تبلیغات حذف‌شده:")
 
+    for index, item in enumerate(removed_ads, start=1):
+
+        print("\nشماره:", index)
+        print("عنوان:", item["title"])
+        print("علت حذف:", item["reason"])
+
+    # نمایش خبرهای نهایی، بدون نام منبع و لینک
     print("\n")
     print("=" * 50)
-    print("تعداد دریافتی از هر منبع")
-    print("=" * 50)
-
-    for source, count in source_counts.items():
-
-        print(f"- {source}: {count}")
-
-    if source_errors:
-
-        print("\nخطاهای منابع:")
-
-        for source, error in source_errors.items():
-
-            print(f"- {source}: {error}")
-
-    # =============================================
-    # نمونه تبلیغات حذف‌شده
-    # =============================================
-
-    print("\n")
-    print("=" * 50)
-    print("نمونه تبلیغات و پیام‌های غیرخبری حذف‌شده")
-    print("=" * 50)
-
-    if removed_ads:
-
-        for index, item in enumerate(removed_ads, start=1):
-
-            print("\nشماره:", index)
-            print("عنوان:", item["title"])
-            print("علت حذف:", item["reason"])
-            print("منبع:", item["source"])
-
-    else:
-
-        print("موردی شناسایی نشد.")
-
-    # =============================================
-    # نمایش خبرهای نهایی
-    # =============================================
-
-    print("\n")
-    print("=" * 50)
-    print("خبرهای نهایی قابل بررسی:", len(final_news))
+    print("خبرهای نهایی")
     print("=" * 50)
 
     for index, news in enumerate(final_news, start=1):
 
         print("\n------------------------------")
-
         print("شماره:", index)
         print("عنوان:", news["title"])
-        print("متن:", news["description"][:500])
-        print("منبع:", news["source"])
+        print("متن:", news["description"][:700])
         print("تاریخ:", news["date_text"])
-        print("لینک:", news["link"])
+
+        if news.get("image_url"):
+            print("تصویر:", news["image_url"])
+        else:
+            print("تصویر: موجود نیست")
+
+    # ایجاد گزارش تصویری در GitHub Actions
+    write_github_summary(final_news)
 
     print("\nپایان گزارش")
-    print("نسخه 27 اجرا شد.")
+    print("نسخه 28 اجرا شد.")
     print("انتشار خودکار غیرفعال است.")
 
     return final_news
@@ -1233,5 +1147,4 @@ def search_news():
 # =====================================================
 
 if __name__ == "__main__":
-
     search_news()
