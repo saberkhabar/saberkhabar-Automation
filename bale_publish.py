@@ -2,6 +2,7 @@
 import os
 import json
 import hashlib
+import html
 import requests
 
 from bale_news_search import search_news
@@ -46,7 +47,7 @@ def save_state(ids):
         json.dump(ids[-3000:], f, ensure_ascii=False, indent=2)
 
 
-def send_news(news):
+def make_caption(news):
     title = news.get("title", "خبر محلی شفت")
 
     title = title.replace(
@@ -55,17 +56,36 @@ def send_news(news):
     )
 
     description = news.get("description", "")
-    image_url = news.get("image_url", "")
+    source = news.get("source", "")
+    news_link = news.get("link", "")
+
+    # جلوگیری از طولانی شدن بیش از حد پیام
+    description = description[:450]
 
     caption = (
-    f"📰 {title}\n\n"
-    f"{description}\n\n"
-    "📢 <b>اخبار شفت را دنبال کنید:</b>\n"
-    '<a href="https://ble.ir/shaftkhabar">'
-    "https://ble.ir/shaftkhabar</a>"
-)
+        f"📰 <b>{html.escape(title)}</b>\n\n"
+        f"{html.escape(description)}"
+    )
 
-caption = caption[:1000]
+    if source:
+        caption += f"\n\nمنبع: {html.escape(source)}"
+
+    if news_link:
+        safe_link = html.escape(news_link, quote=True)
+        caption += f'\n<a href="{safe_link}">لینک خبر اصلی</a>'
+
+    caption += (
+        "\n\n📢 <b>اخبار شفت را دنبال کنید:</b>\n"
+        '<a href="https://ble.ir/shaftkhabar">'
+        "https://ble.ir/shaftkhabar</a>"
+    )
+
+    return caption
+
+
+def send_news(news):
+    caption = make_caption(news)
+    image_url = news.get("image_url", "")
 
     if image_url.startswith(("https://", "http://")):
         try:
@@ -86,7 +106,8 @@ caption = caption[:1000]
                 f"{BASE_URL}/sendPhoto",
                 data={
                     "chat_id": CHANNEL,
-                    "caption": caption
+                    "caption": caption,
+                    "parse_mode": "HTML"
                 },
                 files={
                     "photo": (
@@ -105,7 +126,8 @@ caption = caption[:1000]
                 f"{BASE_URL}/sendMessage",
                 json={
                     "chat_id": CHANNEL,
-                    "text": caption
+                    "text": caption,
+                    "parse_mode": "HTML"
                 },
                 timeout=30
             )
@@ -115,7 +137,8 @@ caption = caption[:1000]
             f"{BASE_URL}/sendMessage",
             json={
                 "chat_id": CHANNEL,
-                "text": caption
+                "text": caption,
+                "parse_mode": "HTML"
             },
             timeout=30
         )
@@ -123,9 +146,11 @@ caption = caption[:1000]
     result = response.json()
 
     if not result.get("ok"):
-        raise RuntimeError(f"خطا در ارسال به بله: {result}")
+        raise RuntimeError(
+            f"خطا در ارسال به بله: {result}"
+        )
 
-    print("خبر ارسال شد:", title)
+    print("خبر ارسال شد:", news.get("title", ""))
 
 
 def main():
@@ -139,8 +164,7 @@ def main():
 
     state = load_state()
 
-    # اجرای اول: خبرهای فعلی فقط ثبت می‌شوند
-    # تا خبرهای قدیمی دوباره منتشر نشوند.
+    # اجرای اول: ثبت خبرهای فعلی بدون انتشار
     if state is None:
         initial_ids = [
             get_news_id(news)
@@ -155,20 +179,19 @@ def main():
 
     sent_ids = set(state)
 
-    # فقط خبرهای جدید انتخاب می‌شوند.
+    # انتشار فقط یک خبر جدید در هر اجرا
     for news in news_list:
         news_id = get_news_id(news)
 
         if news_id in sent_ids:
             continue
 
-        # فقط یک خبر در هر اجرا
         send_news(news)
 
         state.append(news_id)
         save_state(state)
 
-        print("ارسال آزمایشی یک خبر جدید تمام شد.")
+        print("ارسال یک خبر جدید تمام شد.")
         return
 
     print("خبر جدیدی برای انتشار وجود ندارد.")
