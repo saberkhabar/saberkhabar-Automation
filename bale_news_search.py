@@ -7,10 +7,10 @@ import html
 RSS_URL = "https://www.mehrnews.com/rss"
 
 LOCAL_WORDS = [
+    "شفت",
     "شهرستان شفت",
     "شفت گیلان",
     "فرماندار شفت",
-    "شفت-",
     "احمدسرگوراب",
     "احمد سرگوراب",
     "امامزاده ابراهیم",
@@ -26,10 +26,12 @@ LOCAL_WORDS = [
     "علیسرا"
 ]
 
+
 def clean_text(text):
     text = html.unescape(text or "")
     text = re.sub(r"<[^>]+>", " ", text)
     return " ".join(text.split())
+
 
 def search_news():
     try:
@@ -46,9 +48,15 @@ def search_news():
         items = root.findall(".//item")
 
         print("تعداد کل خبرهای دریافتی:", len(items))
-for item in items:
-    print(clean_text(item.findtext("title", "")))
-        
+
+        # نمایش عنوان تمام خبرهای دریافتی
+        print("\n========== تمام خبرهای دریافتی ==========")
+
+        for item in items:
+            title = clean_text(item.findtext("title", ""))
+            print("-", title)
+
+        # پیدا کردن خبرهای احتمالی مرتبط با شفت
         found = []
 
         for item in items:
@@ -68,7 +76,8 @@ for item in items:
                     "date": pub_date
                 })
 
-        print("تعداد خبرهای مرتبط احتمالی با شفت:", len(found))
+        print("\n========== خبرهای احتمالی شفت ==========")
+        print("تعداد خبرهای مرتبط:", len(found))
 
         for news in found:
             print("\n-------------------------")
@@ -79,6 +88,7 @@ for item in items:
 
     except Exception as error:
         print("خطا در دریافت خبر:", error)
+
 
 if __name__ == "__main__":
     search_news()
