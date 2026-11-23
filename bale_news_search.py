@@ -4,8 +4,10 @@ import xml.etree.ElementTree as ET
 import re
 import html
 import time
+
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
+from urllib.parse import urlparse, parse_qs
 
 RSS_SOURCES = {
     "خبرگزاری مهر": "https://www.mehrnews.com/rss",
@@ -25,7 +27,7 @@ BING_QUERIES = [
     '"نصیرمحله" شفت',
     '"جیرده" شفت',
     '"ملاسرا" شفت',
-    '"ویسرود" گیلان',
+    '"ویسرود گیلان"',
 ]
 
 LOCAL_TITLE_WORDS = [
@@ -58,12 +60,32 @@ def normalize_text(text):
     return " ".join(text.split()).strip()
 
 
+def extract_real_link(link):
+    if not link:
+        return ""
+
+    try:
+        parsed = urlparse(link)
+        params = parse_qs(parsed.query)
+
+        if "url" in params:
+            return params["url"][0]
+
+    except Exception:
+        pass
+
+    return link
+
+
 def get_child_text(element, name):
     for child in element:
         if child.tag.split("}")[-1].lower() == name.lower():
+
             if name == "link":
                 return child.attrib.get("href", child.text or "")
+
             return child.text or ""
+
     return ""
 
 
@@ -113,6 +135,7 @@ def parse_news_date(date_text):
 
 
 def get_news_data(item):
+
     title = normalize_text(
         clean_text(get_child_text(item, "title"))
     )
@@ -123,7 +146,9 @@ def get_news_data(item):
         or get_child_text(item, "content")
     )
 
-    link = get_child_text(item, "link")
+    link = extract_real_link(
+        get_child_text(item, "link")
+    )
 
     date_text = (
         get_child_text(item, "pubDate")
@@ -144,6 +169,7 @@ def get_news_data(item):
 
 
 def fetch_rss(name, url):
+
     print("\n==============================")
     print("منبع:", name)
 
@@ -155,6 +181,7 @@ def fetch_rss(name, url):
         )
 
         print("وضعیت اتصال:", response.status_code)
+
         response.raise_for_status()
 
         root = ET.fromstring(response.content)
@@ -162,15 +189,22 @@ def fetch_rss(name, url):
 
         print("تعداد خبرهای دریافتی:", len(items))
 
-        return [get_news_data(item) for item in items]
+        return [
+            get_news_data(item)
+            for item in items
+        ]
 
     except Exception as error:
+
         print("خطا:", error)
+
         return []
 
 
 def search_bing(query):
+
     try:
+
         response = requests.get(
             "https://www.bing.com/news/search",
             params={
@@ -192,15 +226,22 @@ def search_bing(query):
 
         print("تعداد نتایج:", len(items))
 
-        return [get_news_data(item) for item in items]
+        return [
+            get_news_data(item)
+            for item in items
+        ]
 
     except Exception as error:
+
         print("خطا در Bing:", error)
+
         return []
 
 
 def search_news():
+
     recent_news = []
+
     old_news_count = 0
     missing_date_count = 0
 
@@ -208,10 +249,13 @@ def search_news():
     checked_titles = set()
 
     now = datetime.now(timezone.utc)
+
     seven_days_ago = now - timedelta(days=7)
 
     def process_news(news):
-        nonlocal old_news_count, missing_date_count
+
+        nonlocal old_news_count
+        nonlocal missing_date_count
 
         title = news["title"].strip()
         link = news["link"].strip()
@@ -244,39 +288,60 @@ def search_news():
 
         recent_news.append(news)
 
+    # بررسی خبرگزاری‌ها
+
     for name, url in RSS_SOURCES.items():
+
         news_list = fetch_rss(name, url)
 
         for news in news_list:
+
             news["source"] = news["source"] or name
+
             process_news(news)
 
         time.sleep(1)
 
+    # جست‌وجوی محلی در Bing
+
     for query in BING_QUERIES:
+
         news_list = search_bing(query)
 
         for news in news_list:
+
             news["source"] = news["source"] or "Bing News"
+
             process_news(news)
 
         time.sleep(1)
+
+    # گزارش نهایی
 
     print("\n================================")
     print("گزارش نهایی جست‌وجوی شفت")
     print("================================")
 
     print("بازه بررسی: ۷ روز اخیر")
+
     print("خبرهای جدید و مرتبط:", len(recent_news))
+
     print("خبرهای قدیمی یا خارج از بازه:", old_news_count)
+
     print("خبرهای بدون تاریخ معتبر:", missing_date_count)
 
     for index, news in enumerate(recent_news, start=1):
+
         print("\n------------------------------")
+
         print("شماره:", index)
+
         print("عنوان:", news["title"])
+
         print("منبع:", news["source"])
+
         print("تاریخ:", news["date_text"])
+
         print("لینک:", news["link"])
 
 
