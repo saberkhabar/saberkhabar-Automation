@@ -4,12 +4,15 @@ import xml.etree.ElementTree as ET
 from urllib.parse import urlencode
 
 SEARCHES = [
-    '"شهرستان شفت"',
-    '"شفت گیلان"',
-    '"اخبار شفت"',
-    '"روستاهای شفت"'
+    "شفت گیلان خبر",
+    "اخبار شهرستان شفت",
+    "فرمانداری شهرستان شفت",
+    "حوادث شفت گیلان",
+    "روستاهای شهرستان شفت",
+    "اخبار بخش مرکزی شفت",
+    "اخبار احمدسرگوراب"
 ]
-
+    
 def search_news(query):
     url = "https://news.google.com/rss/search?"
     params = {
