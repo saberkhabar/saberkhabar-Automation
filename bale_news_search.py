@@ -80,7 +80,90 @@ LOCAL_WORDS = [
 
 
 # =====================================
-# آمار منابع و خطاها
+# کلمات تبلیغاتی
+# =====================================
+
+AD_WORDS = [
+    "تخفیف ویژه",
+    "فروش ویژه",
+    "حراج",
+    "قیمت استثنایی",
+    "خرید مستقیم",
+    "فروش فوری",
+    "فروش اقساطی",
+    "ارسال رایگان",
+    "سفارش دهید",
+    "جهت سفارش",
+    "جهت خرید",
+    "ثبت سفارش",
+    "تماس جهت خرید",
+    "معرفی محصول",
+    "محصولات ما",
+    "خدمات ما",
+    "نمایندگی فروش",
+    "فروشگاه",
+    "کسب و کار",
+    "تبلیغات",
+    "آگهی تبلیغاتی",
+    "تور گردشگری",
+    "تور زیارتی",
+    "کاروان زیارتی",
+    "کاروان کربلا",
+    "کاروان عتبات",
+    "ظرفیت محدود",
+    "فرصت محدود",
+    "رزرو کنید",
+    "رزرو تور",
+    "پذیرش مشتری",
+    "مشاوره رایگان",
+    "تضمینی",
+    "شماره تماس جهت ثبت نام",
+]
+
+# پیام‌های غیرخبری
+NON_NEWS_WORDS = [
+    "تبریک و تهنیت",
+    "تبریک عرض می نماییم",
+    "تبریک عرض می‌کنیم",
+    "سالروز تولد",
+    "تولدتان مبارک",
+    "پیام تبریک",
+    "پیام تسلیت",
+    "درگذشت پدر گرامی",
+    "درگذشت مادر گرامی",
+    "مصیبت وارده",
+    "تسلیت عرض می نماییم",
+    "تسلیت عرض می‌کنیم",
+    "یادبود شخصی",
+]
+
+# اطلاعیه‌هایی که باید حفظ شوند
+IMPORTANT_NOTICE_WORDS = [
+    "تعطیلی مدارس",
+    "مدارس تعطیل",
+    "غیرحضوری شدن مدارس",
+    "غیرحضوری مدارس",
+    "قطعی آب",
+    "قطعی برق",
+    "افت فشار آب",
+    "قطعی گاز",
+    "هشدار هواشناسی",
+    "هشدار سیل",
+    "هشدار بارندگی",
+    "هشدار زلزله",
+    "اطلاعیه فرمانداری",
+    "اطلاعیه بخشداری",
+    "اطلاعیه آموزش و پرورش",
+    "اطلاعیه آب و فاضلاب",
+    "اطلاعیه برق",
+    "اطلاعیه اورژانس",
+    "اطلاعیه پلیس",
+    "اطلاعیه مدیریت بحران",
+]
+
+
+# =====================================
+# آمار
 # =====================================
 
 source_counts = {}
@@ -96,7 +179,7 @@ def register_error(name, error):
 
 
 # =====================================
-# پاک‌سازی متن
+# پاک‌سازی و یکسان‌سازی متن
 # =====================================
 
 def clean_text(text):
@@ -123,6 +206,68 @@ def normalize_text(text):
     text = re.sub(r"[^\w\s]", " ", text)
 
     return " ".join(text.split()).lower()
+
+
+# =====================================
+# تشخیص تبلیغ و پیام غیرخبری
+# =====================================
+
+def is_important_notice(text):
+
+    normalized = normalize_text(text)
+
+    return any(
+        normalize_text(word) in normalized
+        for word in IMPORTANT_NOTICE_WORDS
+    )
+
+
+def is_advertisement(title, description):
+
+    text = normalize_text(title + " " + description)
+
+    # اطلاعیه‌های ضروری حذف نشوند
+    if is_important_notice(text):
+        return False, ""
+
+    # پیام‌های تبریک و تسلیت غیرخبری
+    for word in NON_NEWS_WORDS:
+
+        if normalize_text(word) in text:
+            return True, "پیام تبریک یا تسلیت غیرخبری"
+
+    # تبلیغات صریح
+    for word in AD_WORDS:
+
+        if normalize_text(word) in text:
+            return True, "عبارت تبلیغاتی: " + word
+
+    # تشخیص شماره تماس همراه با عبارت‌های تجاری
+    commercial_words = [
+        "فروش",
+        "خرید",
+        "سفارش",
+        "ثبت نام",
+        "رزرو",
+        "قیمت",
+        "محصول",
+        "خدمات",
+    ]
+
+    has_phone = bool(
+        re.search(r"09\d{9}", text)
+        or re.search(r"۰۹[۰-۹]{9}", text)
+    )
+
+    has_commercial_word = any(
+        normalize_text(word) in text
+        for word in commercial_words
+    )
+
+    if has_phone and has_commercial_word:
+        return True, "شماره تماس همراه با عبارت تجاری"
+
+    return False, ""
 
 
 # =====================================
@@ -328,7 +473,7 @@ def fetch_rss(name, url):
 
 
 # =====================================
-# دریافت تلگرام
+# دریافت پست‌های عمومی تلگرام
 # =====================================
 
 def fetch_telegram_channel(name, username):
@@ -537,10 +682,9 @@ def search_news():
 
     now = datetime.now(timezone.utc)
 
-    seven_days_ago = now - timedelta(days=DAYS_BACK)
+    date_limit = now - timedelta(days=DAYS_BACK)
 
     # دریافت RSS
-
     for name, url in RSS_SOURCES.items():
 
         all_news.extend(
@@ -550,7 +694,6 @@ def search_news():
         time.sleep(1)
 
     # دریافت تلگرام
-
     for name, username in TELEGRAM_CHANNELS.items():
 
         all_news.extend(
@@ -560,7 +703,6 @@ def search_news():
         time.sleep(1)
 
     # دریافت Bing
-
     bing_count = 0
 
     for query in BING_QUERIES:
@@ -575,16 +717,20 @@ def search_news():
 
     register_source("Bing", bing_count)
 
-    # آمار فیلترها
+    # =================================
+    # فیلتر خبرها
+    # =================================
 
     local_count = 0
-    old_news_count = 0
+    ad_count = 0
+    old_count = 0
     missing_date_count = 0
-    future_date_count = 0
+    future_count = 0
     not_local_count = 0
     empty_count = 0
 
     local_news = []
+    removed_ads = []
 
     for news in all_news:
 
@@ -604,43 +750,69 @@ def search_news():
 
         local_count += 1
 
+        # حذف تبلیغات و پیام‌های غیرخبری
+        is_ad, reason = is_advertisement(
+            title,
+            description
+        )
+
+        if is_ad:
+
+            ad_count += 1
+
+            if len(removed_ads) < 10:
+
+                removed_ads.append({
+                    "title": title,
+                    "reason": reason,
+                    "source": news["source"]
+                })
+
+            continue
+
         if date is None:
 
             missing_date_count += 1
             continue
 
-        if date < seven_days_ago:
+        if date < date_limit:
 
-            old_news_count += 1
+            old_count += 1
             continue
 
         if date > now:
 
-            future_date_count += 1
+            future_count += 1
             continue
 
         local_news.append(news)
 
-    # مرتب‌سازی تاریخ
+    # =================================
+    # مرتب‌سازی
+    # =================================
 
     local_news.sort(
         key=lambda item: item["date"],
         reverse=True
     )
 
+    # =================================
     # حذف تکراری‌ها
+    # =================================
 
-    recent_news = []
+    final_news = []
 
     for news in local_news:
 
-        if not is_duplicate(news, recent_news):
+        if not is_duplicate(news, final_news):
 
-            recent_news.append(news)
+            final_news.append(news)
 
-    duplicate_count = len(local_news) - len(recent_news)
+    duplicate_count = len(local_news) - len(final_news)
 
+    # =================================
     # گزارش نهایی
+    # =================================
 
     print("\n")
     print("=" * 45)
@@ -649,16 +821,20 @@ def search_news():
 
     print("بازه بررسی:", DAYS_BACK, "روز اخیر")
     print("کل موارد دریافتی:", len(all_news))
-    print("خبرهای محلی شناسایی‌شده:", local_count)
-    print("خبرهای محلی در بازه زمانی:", len(local_news))
-    print("خبرهای تکراری حذف‌شده:", duplicate_count)
-    print("خبرهای قدیمی:", old_news_count)
+    print("موارد محلی شناسایی‌شده:", local_count)
+    print("تبلیغات و پیام‌های غیرخبری حذف‌شده:", ad_count)
+    print("خبرهای قدیمی:", old_count)
     print("خبرهای بدون تاریخ:", missing_date_count)
-    print("خبرهای دارای تاریخ آینده:", future_date_count)
+    print("خبرهای دارای تاریخ آینده:", future_count)
     print("موارد نامرتبط:", not_local_count)
     print("موارد خالی:", empty_count)
+    print("خبرهای محلی در بازه زمانی:", len(local_news))
+    print("خبرهای تکراری حذف‌شده:", duplicate_count)
 
-    print("\nتعداد دریافتی از هر منبع:")
+    print("\n")
+    print("=" * 45)
+    print("تعداد دریافتی از هر منبع")
+    print("=" * 45)
 
     for source, count in source_counts.items():
 
@@ -672,12 +848,38 @@ def search_news():
 
             print(f"- {source}: {error}")
 
+    # =================================
+    # نمونه تبلیغات حذف‌شده
+    # =================================
+
     print("\n")
     print("=" * 45)
-    print("خبرهای نهایی قابل بررسی:", len(recent_news))
+    print("نمونه تبلیغات حذف‌شده")
     print("=" * 45)
 
-    for index, news in enumerate(recent_news, start=1):
+    if removed_ads:
+
+        for index, item in enumerate(removed_ads, start=1):
+
+            print("\nشماره:", index)
+            print("عنوان:", item["title"])
+            print("علت حذف:", item["reason"])
+            print("منبع:", item["source"])
+
+    else:
+
+        print("تبلیغی شناسایی نشد.")
+
+    # =================================
+    # نمایش خبرهای نهایی
+    # =================================
+
+    print("\n")
+    print("=" * 45)
+    print("خبرهای نهایی قابل بررسی:", len(final_news))
+    print("=" * 45)
+
+    for index, news in enumerate(final_news, start=1):
 
         print("\n------------------------------")
 
@@ -691,7 +893,7 @@ def search_news():
     print("\nپایان گزارش")
     print("انتشار خودکار غیرفعال است.")
 
-    return recent_news
+    return final_news
 
 
 if __name__ == "__main__":
