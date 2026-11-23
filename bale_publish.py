@@ -57,8 +57,15 @@ def send_news(news):
     description = news.get("description", "")
     image_url = news.get("image_url", "")
 
-    caption = f"📰 {title}\n\n{description}"
-    caption = caption[:1000]
+    caption = (
+    f"📰 {title}\n\n"
+    f"{description}\n\n"
+    "📢 <b>اخبار شفت را دنبال کنید:</b>\n"
+    '<a href="https://ble.ir/shaftkhabar">'
+    "https://ble.ir/shaftkhabar</a>"
+)
+
+caption = caption[:1000]
 
     if image_url.startswith(("https://", "http://")):
         try:
