@@ -13,8 +13,14 @@ from urllib.parse import urlparse, parse_qs, urljoin
 
 
 # =====================================
-# منابع RSS
+# تنظیمات
 # =====================================
+
+DAYS_BACK = 7
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0"
+}
 
 RSS_SOURCES = {
     "خبرگزاری مهر": "https://www.mehrnews.com/rss",
@@ -23,11 +29,6 @@ RSS_SOURCES = {
     "باشگاه خبرنگاران جوان": "https://www.yjc.ir/fa/rss/allnews",
     "تابناک": "https://www.tabnak.ir/fa/rss/allnews",
 }
-
-
-# =====================================
-# کانال‌های عمومی تلگرام
-# =====================================
 
 TELEGRAM_CHANNELS = {
     "شفت خبر": "shaft_khabar",
@@ -39,11 +40,6 @@ TELEGRAM_CHANNELS = {
     "اخبار گیلان": "akhbaregilan",
     "گیلان فارس": "gilanfars",
 }
-
-
-# =====================================
-# جست‌وجوی Bing
-# =====================================
 
 BING_QUERIES = [
     '"شهرستان شفت"',
@@ -57,11 +53,6 @@ BING_QUERIES = [
     '"ملاسرا" شفت',
     '"ویسرود گیلان"',
 ]
-
-
-# =====================================
-# کلمات مرتبط با منطقه
-# =====================================
 
 LOCAL_WORDS = [
     "شفت",
@@ -88,9 +79,20 @@ LOCAL_WORDS = [
 ]
 
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0"
-}
+# =====================================
+# آمار منابع و خطاها
+# =====================================
+
+source_counts = {}
+source_errors = {}
+
+
+def register_source(name, count):
+    source_counts[name] = count
+
+
+def register_error(name, error):
+    source_errors[name] = str(error)
 
 
 # =====================================
@@ -154,7 +156,9 @@ def get_child_text(element, name):
 
     for child in element:
 
-        if child.tag.split("}")[-1].lower() == name.lower():
+        tag = child.tag.split("}")[-1].lower()
+
+        if tag == name.lower():
 
             if name.lower() == "link":
 
@@ -305,10 +309,11 @@ def fetch_rss(name, url):
         for item in items:
 
             news = get_news_data(item)
-
             news["source"] = news["source"] or name
 
             news_list.append(news)
+
+        register_source(name, len(news_list))
 
         return news_list
 
@@ -316,11 +321,14 @@ def fetch_rss(name, url):
 
         print("خطا در RSS:", error)
 
+        register_source(name, 0)
+        register_error(name, error)
+
         return []
 
 
 # =====================================
-# دریافت پست‌های عمومی تلگرام
+# دریافت تلگرام
 # =====================================
 
 def fetch_telegram_channel(name, username):
@@ -376,7 +384,6 @@ def fetch_telegram_channel(name, username):
             date_text = ""
 
             if time_element:
-
                 date_text = time_element.get(
                     "datetime",
                     ""
@@ -414,24 +421,27 @@ def fetch_telegram_channel(name, username):
             news_list.append({
 
                 "title": title,
-
                 "description": description,
-
                 "link": link,
-
                 "date_text": date_text,
-
                 "date": date,
-
                 "source": "تلگرام - " + name
 
             })
+
+        register_source(
+            "تلگرام - " + name,
+            len(news_list)
+        )
 
         return news_list
 
     except Exception as error:
 
         print("خطا در تلگرام:", error)
+
+        register_source("تلگرام - " + name, 0)
+        register_error("تلگرام - " + name, error)
 
         return []
 
@@ -470,7 +480,6 @@ def search_bing(query):
         for item in items:
 
             news = get_news_data(item)
-
             news["source"] = news["source"] or "Bing News"
 
             news_list.append(news)
@@ -480,6 +489,8 @@ def search_bing(query):
     except Exception as error:
 
         print("خطا در Bing:", error)
+
+        register_error("Bing: " + query, error)
 
         return []
 
@@ -491,7 +502,6 @@ def search_bing(query):
 def is_duplicate(news, accepted_news):
 
     title = normalize_text(news["title"])
-
     link = news["link"].strip()
 
     for old_news in accepted_news:
@@ -501,9 +511,7 @@ def is_duplicate(news, accepted_news):
         if link and old_link and link == old_link:
             return True
 
-        old_title = normalize_text(
-            old_news["title"]
-        )
+        old_title = normalize_text(old_news["title"])
 
         if min(len(title), len(old_title)) >= 25:
 
@@ -527,96 +535,93 @@ def search_news():
 
     all_news = []
 
-    source_counts = {}
-
     now = datetime.now(timezone.utc)
 
-    seven_days_ago = now - timedelta(days=7)
+    seven_days_ago = now - timedelta(days=DAYS_BACK)
 
-    # RSS
+    # دریافت RSS
 
     for name, url in RSS_SOURCES.items():
 
-        news_list = fetch_rss(name, url)
-
-        source_counts[name] = len(news_list)
-
-        all_news.extend(news_list)
+        all_news.extend(
+            fetch_rss(name, url)
+        )
 
         time.sleep(1)
 
-    # Telegram
+    # دریافت تلگرام
 
     for name, username in TELEGRAM_CHANNELS.items():
 
-        news_list = fetch_telegram_channel(
-            name,
-            username
+        all_news.extend(
+            fetch_telegram_channel(name, username)
         )
-
-        source_counts["تلگرام - " + name] = len(news_list)
-
-        all_news.extend(news_list)
 
         time.sleep(1)
 
-    # Bing
+    # دریافت Bing
+
+    bing_count = 0
 
     for query in BING_QUERIES:
 
         news_list = search_bing(query)
 
-        source_counts["Bing"] = (
-            source_counts.get("Bing", 0)
-            + len(news_list)
-        )
+        bing_count += len(news_list)
 
         all_news.extend(news_list)
 
         time.sleep(1)
 
-    # فیلتر اخبار
+    register_source("Bing", bing_count)
+
+    # آمار فیلترها
+
+    local_count = 0
+    old_news_count = 0
+    missing_date_count = 0
+    future_date_count = 0
+    not_local_count = 0
+    empty_count = 0
 
     local_news = []
-
-    old_news_count = 0
-
-    missing_date_count = 0
-
-    not_local_count = 0
 
     for news in all_news:
 
         title = news["title"].strip()
-
         description = news["description"].strip()
-
         date = news["date"]
 
         if not title and not description:
+
+            empty_count += 1
             continue
 
         if not is_local_news(title, description):
 
             not_local_count += 1
-
             continue
+
+        local_count += 1
 
         if date is None:
 
             missing_date_count += 1
-
             continue
 
-        if date < seven_days_ago or date > now:
+        if date < seven_days_ago:
 
             old_news_count += 1
+            continue
 
+        if date > now:
+
+            future_date_count += 1
             continue
 
         local_news.append(news)
 
-    # جدیدترین خبرها اول
+    # مرتب‌سازی تاریخ
 
     local_news.sort(
         key=lambda item: item["date"],
@@ -633,30 +638,25 @@ def search_news():
 
             recent_news.append(news)
 
+    duplicate_count = len(local_news) - len(recent_news)
+
     # گزارش نهایی
 
-    print("\n================================")
-    print("گزارش نهایی جست‌وجوی شفت")
-    print("================================")
+    print("\n")
+    print("=" * 45)
+    print("گزارش نهایی جست‌وجوی اخبار شهرستان شفت")
+    print("=" * 45)
 
-    print("بازه بررسی: ۷ روز اخیر")
-
+    print("بازه بررسی:", DAYS_BACK, "روز اخیر")
     print("کل موارد دریافتی:", len(all_news))
-
-    print("خبرهای محلی در بازه:", len(local_news))
-
-    print(
-        "خبرهای تکراری حذف‌شده:",
-        len(local_news) - len(recent_news)
-    )
-
-    print("خبرهای نهایی:", len(recent_news))
-
+    print("خبرهای محلی شناسایی‌شده:", local_count)
+    print("خبرهای محلی در بازه زمانی:", len(local_news))
+    print("خبرهای تکراری حذف‌شده:", duplicate_count)
     print("خبرهای قدیمی:", old_news_count)
-
     print("خبرهای بدون تاریخ:", missing_date_count)
-
+    print("خبرهای دارای تاریخ آینده:", future_date_count)
     print("موارد نامرتبط:", not_local_count)
+    print("موارد خالی:", empty_count)
 
     print("\nتعداد دریافتی از هر منبع:")
 
@@ -664,21 +664,32 @@ def search_news():
 
         print(f"- {source}: {count}")
 
+    if source_errors:
+
+        print("\nخطاهای منابع:")
+
+        for source, error in source_errors.items():
+
+            print(f"- {source}: {error}")
+
+    print("\n")
+    print("=" * 45)
+    print("خبرهای نهایی قابل بررسی:", len(recent_news))
+    print("=" * 45)
+
     for index, news in enumerate(recent_news, start=1):
 
         print("\n------------------------------")
 
         print("شماره:", index)
-
         print("عنوان:", news["title"])
-
         print("متن:", news["description"][:500])
-
         print("منبع:", news["source"])
-
         print("تاریخ:", news["date_text"])
-
         print("لینک:", news["link"])
+
+    print("\nپایان گزارش")
+    print("انتشار خودکار غیرفعال است.")
 
     return recent_news
 
