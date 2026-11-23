@@ -21,6 +21,10 @@ if not news_list:
 news = news_list[0]
 
 title = news.get("title", "خبر محلی شفت")
+title = title.replace(
+    "یادواره شهدای خانگی",
+    "یادواره خانگی شهدا"
+)
 description = news.get("description", "")
 image_url = news.get("image_url", "")
 
