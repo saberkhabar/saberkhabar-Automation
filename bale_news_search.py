@@ -39,6 +39,11 @@ def clean_text(text):
     return " ".join(text.split())
 
 
+def normalize_text(text):
+    text = text.replace("ي", "ی").replace("ك", "ک")
+    return " ".join(text.split()).strip()
+
+
 def get_child_text(element, name):
     for child in element:
         if child.tag.split("}")[-1] == name:
@@ -49,15 +54,28 @@ def get_child_text(element, name):
 
 
 def get_news_items(root):
-    items = []
+    return [
+        element
+        for element in root.iter()
+        if element.tag.split("}")[-1] in ("item", "entry")
+    ]
 
-    for element in root.iter():
-        tag = element.tag.split("}")[-1]
 
-        if tag in ("item", "entry"):
-            items.append(element)
+def is_local_news(title):
+    title = normalize_text(title)
 
-    return items
+    for word in LOCAL_WORDS:
+        word = normalize_text(word)
+
+        if word == "شفت":
+            # شفت به‌تنهایی فقط وقتی پذیرفته شود
+            # که عنوان صریحاً به شهرستان اشاره کند.
+            if "شهرستان شفت" in title or "شفت گیلان" in title:
+                return True
+        elif word in title:
+            return True
+
+    return False
 
 
 def fetch_source(source_name, rss_url):
@@ -82,7 +100,10 @@ def fetch_source(source_name, rss_url):
         found = []
 
         for item in items:
-            title = clean_text(get_child_text(item, "title"))
+            title = normalize_text(
+                clean_text(get_child_text(item, "title"))
+            )
+
             description = clean_text(
                 get_child_text(item, "description")
                 or get_child_text(item, "summary")
@@ -90,28 +111,28 @@ def fetch_source(source_name, rss_url):
             )
 
             link = get_child_text(item, "link")
+
             pub_date = (
                 get_child_text(item, "pubDate")
                 or get_child_text(item, "published")
                 or get_child_text(item, "updated")
             )
 
-            combined = title + " " + description
-
-            if any(word in combined for word in LOCAL_WORDS):
+            if is_local_news(title):
                 found.append({
                     "title": title,
+                    "description": description,
                     "link": link,
                     "date": pub_date,
                     "source": source_name
                 })
 
-        print("خبرهای احتمالی مرتبط با شفت:", len(found))
+        print("خبرهای محلی احتمالی:", len(found))
 
         return found
 
     except Exception as error:
-        print("خطا در دریافت این منبع:", error)
+        print("خطا در دریافت منبع:", error)
         return []
 
 
@@ -144,9 +165,9 @@ def search_news():
         time.sleep(1)
 
     print("\n================================")
-    print("نتیجه نهایی جست‌وجوی چندمنبعی")
+    print("نتیجه نهایی جست‌وجو")
     print("================================")
-    print("تعداد کل خبرهای مرتبط احتمالی:", len(all_news))
+    print("تعداد خبرهای محلی احتمالی:", len(all_news))
 
     for index, news in enumerate(all_news, start=1):
         print("\n------------------------------")
