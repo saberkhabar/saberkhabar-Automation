@@ -32,6 +32,7 @@ def search_news(query):
 
         root = ET.fromstring(response.content)
         items = root.findall(".//item")
+        print("تعداد خبرهای پیدا شده:", len(items))
 
         for item in items:
             title = item.findtext("title", "")
