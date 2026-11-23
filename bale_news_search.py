@@ -46,7 +46,9 @@ def search_news():
         items = root.findall(".//item")
 
         print("تعداد کل خبرهای دریافتی:", len(items))
-
+for item in items:
+    print(clean_text(item.findtext("title", "")))
+        
         found = []
 
         for item in items:
