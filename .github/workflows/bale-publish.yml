@@ -1,0 +1,39 @@
+
+name: Bale Publish Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install packages
+        run: pip install requests beautifulsoup4
+
+      - name: Run publisher
+        env:
+          BALE_TOKEN: ${{ secrets.BALE_TOKEN }}
+        run: python bale_publish.py
+
+      - name: Save sent news history
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sent_news.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Save published news history"
+            git push
+          fi
