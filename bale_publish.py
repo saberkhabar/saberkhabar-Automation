@@ -1,4 +1,4 @@
-
+import re
 import os
 import json
 import hashlib
@@ -46,6 +46,26 @@ def save_state(ids):
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(ids[-3000:], f, ensure_ascii=False, indent=2)
 
+def trim_at_sentence(description, limit=450):
+    description = (description or "").strip()
+
+    if len(description) <= limit:
+        return description
+
+    endings = list(re.finditer(
+        r"""[.!?؟۔](?:["»”')\]]*)?(?=\s|$)""",
+        description
+    ))
+
+    if not endings:
+        return description
+
+    valid = [m.end() for m in endings if m.end() <= limit]
+
+    if valid:
+        return description[:valid[-1]].strip()
+
+    return description[:endings[0].end()].strip()
 
 def make_caption(news):
     title = news.get("title", "خبر محلی شفت")
@@ -60,7 +80,7 @@ def make_caption(news):
     news_link = news.get("link", "")
 
     # جلوگیری از طولانی شدن بیش از حد پیام
-    description = description[:450]
+    description = trim_at_sentence(description)
 
     caption = (
         f"📰 <b>{html.escape(title)}</b>\n\n"
