@@ -4,14 +4,19 @@ import xml.etree.ElementTree as ET
 from urllib.parse import urlencode
 
 SEARCHES = [
-    "اخبار شهرستان شفت",
-    "شفت گیلان خبر"
+    "شفت",
+    "شفت گیلان",
+    "شهرستان شفت",
+    "احمدسرگوراب",
+    "ملاسرا شفت",
+    "نصیرمحله شفت",
+    "روستاهای شفت"
 ]
 
 def search_news(query):
     params = {
         "q": query,
-        "hl": "fa",
+        "hl": "fa-IR",
         "gl": "IR",
         "ceid": "IR:fa"
     }
@@ -25,24 +30,20 @@ def search_news(query):
             timeout=30
         )
 
-        print("وضعیت اتصال:", response.status_code)
-        print("نوع محتوا:", response.headers.get("Content-Type"))
-
         response.raise_for_status()
 
-        print("ابتدای پاسخ دریافتی:")
-        print(response.text[:700])
-
         root = ET.fromstring(response.content)
+        channel = root.find("channel")
+        items = channel.findall("item") if channel is not None else []
 
-        print("نوع سند:", root.tag)
-
-        items = root.findall(".//item")
-        print("تعداد خبرها:", len(items))
+        print("\nجست‌وجو:", query)
+        print("تعداد خبر:", len(items))
 
         for item in items:
+            print("--------------------")
             print("عنوان:", item.findtext("title", ""))
             print("لینک:", item.findtext("link", ""))
+            print("تاریخ:", item.findtext("pubDate", ""))
 
     except Exception as error:
         print("خطا:", error)
@@ -50,5 +51,4 @@ def search_news(query):
 
 if __name__ == "__main__":
     for query in SEARCHES:
-        print("\nجست‌وجوی:", query)
         search_news(query)
